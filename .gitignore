@@ -1,0 +1,17 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/dlang_mcp
+dlang_mcp.so
+dlang_mcp.dylib
+dlang_mcp.dll
+libdlang_mcp.a
+dlang_mcp.a
+dlang_mcp.lib
+dlang_mcp-test-*
+*.exe
+*.pdb
+*.o
+*.obj
+*.lst

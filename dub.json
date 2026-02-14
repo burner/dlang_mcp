@@ -1,0 +1,9 @@
+{
+	"name": "dlang_mcp",
+	"description": "MCP server exposing dscanner and dfmt tools",
+	"authors": ["burner"],
+	"copyright": "Copyright © 2026, burner",
+	"license": "MIT",
+	"targetType": "executable",
+	"targetName": "dlang_mcp"
+}
