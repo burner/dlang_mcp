@@ -9,13 +9,15 @@
 	"targetPath": "bin",
 	"dependencies": {
 		"d2sqlite3": "~>1.0.0",
-		"bindbc-onnxruntime": "~>1.2.0"
+		"bindbc-onnxruntime": "~>1.2.0",
+		"vibe-d:http": "~>0.10.3"
 	},
 	"lflags-linux": ["-rpath", "$$ORIGIN/../lib"],
 	"configurations": [
 		{
 			"name": "default",
-			"targetName": "dlang_mcp"
+			"targetName": "dlang_mcp",
+			"versions": ["VibeDisableCommandLineParsing"]
 		},
 		{
 			"name": "test",

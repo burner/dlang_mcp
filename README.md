@@ -50,13 +50,13 @@ Run as an MCP server (for use with Claude, etc.):
 ./bin/dlang_mcp --stats
 
 # Ingest a single package from code.dlang.org
-./bin/dlang_mcp --ingest silly
+./bin/dlang_mcp --ingest --package=silly
 
 # Ingest all packages from code.dlang.org
 ./bin/dlang_mcp --ingest
 
-# Ingest with limit
-./bin/dlang_mcp --ingest --limit 50
+# Ingest with limit and fresh start
+./bin/dlang_mcp --ingest --limit=50 --fresh
 
 # Show ingestion progress
 ./bin/dlang_mcp --ingest-status
@@ -67,11 +67,15 @@ Run as an MCP server (for use with Claude, etc.):
 # Mine usage patterns from indexed data
 ./bin/dlang_mcp --mine-patterns
 
+# Test search with a query
+./bin/dlang_mcp --test-search="hash table lookup"
+
 # Show help
 ./bin/dlang_mcp --help
 ```
 
-#### setup.sh helper
+### Setup Script
+
 ```bash
 # Full setup (recommended)
 ./setup.sh
@@ -81,12 +85,6 @@ Run as an MCP server (for use with Claude, etc.):
 
 # Just build, no packages
 ./setup.sh --skip-packages
-
-# Test search
-./bin/dlang_mcp --test-search "hash table lookup"
-
-# Run MCP server
-./bin/dlang_mcp## Command Line
 ```
 
 ### MCP Client Configuration
@@ -169,7 +167,7 @@ The binary has an embedded rpath (`$ORIGIN/../lib`) so it will automatically fin
 
 ```bash
 # Just run directly - library is found automatically
-./bin/dlang_mcp --test-search "hash table lookup"
+./bin/dlang_mcp --test-search="hash table lookup"
 ```
 
 When ONNX model and library are available, the server will use neural embeddings for better semantic search. Otherwise, TF-IDF is used as fallback.
@@ -180,11 +178,11 @@ When ONNX model and library are available, the server will use neural embeddings
 
 ```bash
 # Index a single package
-./bin/dlang_mcp --ingest silly
+./bin/dlang_mcp --ingest --package=silly
 
 # Index multiple packages
-./bin/dlang_mcp --ingest vibe-d
-./bin/dlang_mcp --ingest mir-algorithm
+./bin/dlang_mcp --ingest --package=vibe-d
+./bin/dlang_mcp --ingest --package=mir-algorithm
 
 # Index all packages (takes a while)
 ./bin/dlang_mcp --ingest
@@ -233,8 +231,8 @@ dub build
 ./bin/dlang_mcp --init-db
 
 # 3. Ingest packages
-./bin/dlang_mcp --ingest phobos
-./bin/dlang_mcp --ingest intel-intrinsics
+./bin/dlang_mcp --ingest --package=phobos
+./bin/dlang_mcp --ingest --package=intel-intrinsics
 
 # 4. Train TF-IDF embeddings
 ./bin/dlang_mcp --train-embeddings
@@ -273,15 +271,15 @@ wget -O data/models/vocab.txt \
 
 # 5. Initialize and ingest
 ./bin/dlang_mcp --init-db
-./bin/dlang_mcp --ingest phobos
-./bin/dlang_mcp --ingest intel-intrinsics
+./bin/dlang_mcp --ingest --package=phobos
+./bin/dlang_mcp --ingest --package=intel-intrinsics
 
 # 6. Train embeddings and mine patterns
 ./bin/dlang_mcp --train-embeddings
 ./bin/dlang_mcp --mine-patterns
 
 # 7. Test search
-./bin/dlang_mcp --test-search "hash table lookup"
+./bin/dlang_mcp --test-search="hash table lookup"
 
 # 8. Run MCP server
 ./bin/dlang_mcp
@@ -463,7 +461,7 @@ Some packages may have unusual structures. Check the error message and try:
 ```bash
 # Clear cache and retry
 rm -rf data/cache/sources/<package-name>
-./bin/dlang_mcp --ingest <package>
+./bin/dlang_mcp --ingest --package=<package>
 ```
 
 ## License

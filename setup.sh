@@ -89,9 +89,9 @@ if [ "$SKIP_PACKAGES" = false ]; then
     echo ""
     echo "[6/7] Ingesting packages..."
     echo "  Ingesting phobos (D standard library)..."
-    ./bin/dlang_mcp --ingest phobos
+    ./bin/dlang_mcp --ingest --package=phobos
     echo "  Ingesting intel-intrinsics..."
-    ./bin/dlang_mcp --ingest intel-intrinsics
+    ./bin/dlang_mcp --ingest --package=intel-intrinsics
     
     echo ""
     echo "[7/7] Training embeddings and mining patterns..."
@@ -115,7 +115,7 @@ if [ "$SKIP_ONNX" = false ]; then
 fi
 echo ""
 echo "Usage:"
-echo "  ./bin/dlang_mcp --test-search \"sort array\""
+echo "  ./bin/dlang_mcp --test-search=\"sort array\""
 echo "  ./bin/dlang_mcp              # Run MCP server"
 echo ""
 if [ "$SKIP_ONNX" = true ]; then

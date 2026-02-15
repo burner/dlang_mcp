@@ -7,21 +7,20 @@ import mcp.types : ToolResult;
 import storage.crud;
 import storage.search;
 
-class ImportTool : SearchTool
-{
-    @property string name()
-    {
-        return "get_imports";
-    }
+class ImportTool : SearchTool {
+	@property string name()
+	{
+		return "get_imports";
+	}
 
-    @property string description()
-    {
-        return "Get the required import statements for D symbols (functions, types, modules). Returns import statements needed to use the specified symbols.";
-    }
+	@property string description()
+	{
+		return "Get the required import statements for D symbols (functions, types, modules). Returns import statements needed to use the specified symbols.";
+	}
 
-    @property JSONValue inputSchema()
-    {
-        return parseJSON(`{
+	@property JSONValue inputSchema()
+	{
+		return parseJSON(`{
             "type": "object",
             "properties": {
                 "symbols": {
@@ -36,53 +35,42 @@ class ImportTool : SearchTool
             },
             "required": []
         }`);
-    }
+	}
 
-    ToolResult execute(JSONValue arguments)
-    {
-        try
-        {
-            string[] symbols;
+	ToolResult execute(JSONValue arguments)
+	{
+		try {
+			string[] symbols;
 
-            if ("symbols" in arguments && arguments["symbols"].type == JSONType.array)
-            {
-                foreach (s; arguments["symbols"].array)
-                {
-                    if (s.type == JSONType.string)
-                    {
-                        symbols ~= s.str;
-                    }
-                }
-            }
-            else if ("symbol" in arguments && arguments["symbol"].type == JSONType.string)
-            {
-                symbols ~= arguments["symbol"].str;
-            }
+			if("symbols" in arguments && arguments["symbols"].type == JSONType.array) {
+				foreach(s; arguments["symbols"].array) {
+					if(s.type == JSONType.string) {
+						symbols ~= s.str;
+					}
+				}
+			} else if("symbol" in arguments && arguments["symbol"].type == JSONType.string) {
+				symbols ~= arguments["symbol"].str;
+			}
 
-            if (symbols.length == 0)
-            {
-                return createErrorResult("Missing required 'symbols' or 'symbol' parameter");
-            }
+			if(symbols.length == 0) {
+				return createErrorResult("Missing required 'symbols' or 'symbol' parameter");
+			}
 
-            auto imports = search.getImportsForSymbols(symbols);
+			auto imports = search.getImportsForSymbols(symbols);
 
-            if (imports.length == 0)
-            {
-                return createTextResult("No imports found for the specified symbols.");
-            }
+			if(imports.length == 0) {
+				return createTextResult("No imports found for the specified symbols.");
+			}
 
-            string output = "Required imports:\n\n```d\n";
-            foreach (imp; imports)
-            {
-                output ~= format("import %s;\n", imp);
-            }
-            output ~= "```\n";
+			string output = "Required imports:\n\n```d\n";
+			foreach(imp; imports) {
+				output ~= format("import %s;\n", imp);
+			}
+			output ~= "```\n";
 
-            return createTextResult(output);
-        }
-        catch (Exception e)
-        {
-            return createErrorResult("Error: " ~ e.msg);
-        }
-    }
+			return createTextResult(output);
+		} catch(Exception e) {
+			return createErrorResult("Error: " ~ e.msg);
+		}
+	}
 }

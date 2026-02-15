@@ -4,43 +4,39 @@ import storage.connection;
 import std.stdio;
 import std.format;
 
-class SchemaManager
-{
-    private DBConnection conn;
-    private int vectorDimensions;
+class SchemaManager {
+	private DBConnection conn;
+	private int vectorDimensions;
 
-    this(DBConnection conn, int vectorDimensions = 384)
-    {
-        this.conn = conn;
-        this.vectorDimensions = vectorDimensions;
-    }
+	this(DBConnection conn, int vectorDimensions = 384)
+	{
+		this.conn = conn;
+		this.vectorDimensions = vectorDimensions;
+	}
 
-    void initializeSchema()
-    {
-        writeln("Initializing database schema...");
+	void initializeSchema()
+	{
+		writeln("Initializing database schema...");
 
-        createCoreTables();
-        createRelationshipTables();
-        createIngestionProgressTable();
-        createFTSTables();
+		createCoreTables();
+		createRelationshipTables();
+		createIngestionProgressTable();
+		createFTSTables();
 
-        if (conn.hasVectorSupport())
-        {
-            createVectorTables();
-            writeln("Vector search enabled (sqlite-vec)");
-        }
-        else
-        {
-            writeln("Vector search disabled (sqlite-vec not loaded)");
-        }
+		if(conn.hasVectorSupport()) {
+			createVectorTables();
+			writeln("Vector search enabled (sqlite-vec)");
+		} else {
+			writeln("Vector search disabled (sqlite-vec not loaded)");
+		}
 
-        createIndexes();
-        writeln("Schema initialized");
-    }
+		createIndexes();
+		writeln("Schema initialized");
+	}
 
-    private void createCoreTables()
-    {
-        conn.execute("
+	private void createCoreTables()
+	{
+		conn.execute("
             CREATE TABLE IF NOT EXISTS packages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
@@ -56,7 +52,7 @@ class SchemaManager
             )
         ");
 
-        conn.execute("
+		conn.execute("
             CREATE TABLE IF NOT EXISTS modules (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 package_id INTEGER NOT NULL,
@@ -68,7 +64,7 @@ class SchemaManager
             )
         ");
 
-        conn.execute("
+		conn.execute("
             CREATE TABLE IF NOT EXISTS functions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 module_id INTEGER NOT NULL,
@@ -90,7 +86,7 @@ class SchemaManager
             )
         ");
 
-        conn.execute("
+		conn.execute("
             CREATE TABLE IF NOT EXISTS types (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 module_id INTEGER NOT NULL,
@@ -104,7 +100,7 @@ class SchemaManager
             )
         ");
 
-        conn.execute("
+		conn.execute("
             CREATE TABLE IF NOT EXISTS code_examples (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 function_id INTEGER,
@@ -121,7 +117,7 @@ class SchemaManager
             )
         ");
 
-        conn.execute("
+		conn.execute("
             CREATE TABLE IF NOT EXISTS template_constraints (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 function_id INTEGER,
@@ -134,7 +130,7 @@ class SchemaManager
             )
         ");
 
-        conn.execute("
+		conn.execute("
             CREATE TABLE IF NOT EXISTS import_requirements (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 function_id INTEGER,
@@ -146,11 +142,11 @@ class SchemaManager
                 FOREIGN KEY (type_id) REFERENCES types(id) ON DELETE CASCADE
             )
         ");
-    }
+	}
 
-    private void createRelationshipTables()
-    {
-        conn.execute("
+	private void createRelationshipTables()
+	{
+		conn.execute("
             CREATE TABLE IF NOT EXISTS function_relationships (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 from_function_id INTEGER NOT NULL,
@@ -163,7 +159,7 @@ class SchemaManager
             )
         ");
 
-        conn.execute("
+		conn.execute("
             CREATE TABLE IF NOT EXISTS type_relationships (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 from_type_id INTEGER NOT NULL,
@@ -175,7 +171,7 @@ class SchemaManager
             )
         ");
 
-        conn.execute("
+		conn.execute("
             CREATE TABLE IF NOT EXISTS usage_patterns (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 pattern_name TEXT NOT NULL,
@@ -186,11 +182,11 @@ class SchemaManager
                 popularity INTEGER DEFAULT 0
             )
         ");
-    }
+	}
 
-    private void createIngestionProgressTable()
-    {
-        conn.execute("
+	private void createIngestionProgressTable()
+	{
+		conn.execute("
             CREATE TABLE IF NOT EXISTS ingestion_progress (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 last_package TEXT,
@@ -201,11 +197,11 @@ class SchemaManager
                 error_message TEXT
             )
         ");
-    }
+	}
 
-    private void createFTSTables()
-    {
-        conn.execute("
+	private void createFTSTables()
+	{
+		conn.execute("
             CREATE VIRTUAL TABLE IF NOT EXISTS fts_packages USING fts5(
                 package_id UNINDEXED,
                 name,
@@ -216,7 +212,7 @@ class SchemaManager
             )
         ");
 
-        conn.execute("
+		conn.execute("
             CREATE VIRTUAL TABLE IF NOT EXISTS fts_functions USING fts5(
                 function_id UNINDEXED,
                 name,
@@ -230,7 +226,7 @@ class SchemaManager
             )
         ");
 
-        conn.execute("
+		conn.execute("
             CREATE VIRTUAL TABLE IF NOT EXISTS fts_types USING fts5(
                 type_id UNINDEXED,
                 name,
@@ -242,7 +238,7 @@ class SchemaManager
             )
         ");
 
-        conn.execute("
+		conn.execute("
             CREATE VIRTUAL TABLE IF NOT EXISTS fts_examples USING fts5(
                 example_id UNINDEXED,
                 code,
@@ -252,11 +248,11 @@ class SchemaManager
                 tokenize='porter unicode61'
             )
         ");
-    }
+	}
 
-    private void createVectorTables()
-    {
-        conn.execute(format("
+	private void createVectorTables()
+	{
+		conn.execute(format("
             CREATE VIRTUAL TABLE IF NOT EXISTS vec_packages 
             USING vec0(
                 package_id INTEGER PRIMARY KEY,
@@ -264,7 +260,7 @@ class SchemaManager
             )
         ", vectorDimensions));
 
-        conn.execute(format("
+		conn.execute(format("
             CREATE VIRTUAL TABLE IF NOT EXISTS vec_functions 
             USING vec0(
                 function_id INTEGER PRIMARY KEY,
@@ -272,7 +268,7 @@ class SchemaManager
             )
         ", vectorDimensions));
 
-        conn.execute(format("
+		conn.execute(format("
             CREATE VIRTUAL TABLE IF NOT EXISTS vec_types 
             USING vec0(
                 type_id INTEGER PRIMARY KEY,
@@ -280,54 +276,56 @@ class SchemaManager
             )
         ", vectorDimensions));
 
-        conn.execute(format("
+		conn.execute(format("
             CREATE VIRTUAL TABLE IF NOT EXISTS vec_examples 
             USING vec0(
                 example_id INTEGER PRIMARY KEY,
                 embedding float[%d] distance_metric=cosine
             )
         ", vectorDimensions));
-    }
+	}
 
-    private void createIndexes()
-    {
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_modules_package ON modules(package_id)");
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_functions_module ON functions(module_id)");
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_functions_name ON functions(name)");
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_types_module ON types(module_id)");
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_types_kind ON types(kind)");
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_func_rel_from ON function_relationships(from_function_id)");
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_func_rel_to ON function_relationships(to_function_id)");
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_type_rel_from ON type_relationships(from_type_id)");
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_type_rel_to ON type_relationships(to_type_id)");
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_examples_function ON code_examples(function_id)");
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_examples_type ON code_examples(type_id)");
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_examples_package ON code_examples(package_id)");
-    }
+	private void createIndexes()
+	{
+		conn.execute("CREATE INDEX IF NOT EXISTS idx_modules_package ON modules(package_id)");
+		conn.execute("CREATE INDEX IF NOT EXISTS idx_functions_module ON functions(module_id)");
+		conn.execute("CREATE INDEX IF NOT EXISTS idx_functions_name ON functions(name)");
+		conn.execute("CREATE INDEX IF NOT EXISTS idx_types_module ON types(module_id)");
+		conn.execute("CREATE INDEX IF NOT EXISTS idx_types_kind ON types(kind)");
+		conn.execute(
+				"CREATE INDEX IF NOT EXISTS idx_func_rel_from ON function_relationships(from_function_id)");
+		conn.execute(
+				"CREATE INDEX IF NOT EXISTS idx_func_rel_to ON function_relationships(to_function_id)");
+		conn.execute(
+				"CREATE INDEX IF NOT EXISTS idx_type_rel_from ON type_relationships(from_type_id)");
+		conn.execute(
+				"CREATE INDEX IF NOT EXISTS idx_type_rel_to ON type_relationships(to_type_id)");
+		conn.execute(
+				"CREATE INDEX IF NOT EXISTS idx_examples_function ON code_examples(function_id)");
+		conn.execute("CREATE INDEX IF NOT EXISTS idx_examples_type ON code_examples(type_id)");
+		conn.execute(
+				"CREATE INDEX IF NOT EXISTS idx_examples_package ON code_examples(package_id)");
+	}
 
-    int getSchemaVersion()
-    {
-        try
-        {
-            auto stmt = conn.prepare("SELECT version FROM schema_version");
-            auto result = stmt.execute();
-            if (!result.empty)
-            {
-                return cast(int)result.front["version"].as!long;
-            }
-        }
-        catch (Exception)
-        {
-        }
-        return 0;
-    }
+	int getSchemaVersion()
+	{
+		try {
+			auto stmt = conn.prepare("SELECT version FROM schema_version");
+			auto result = stmt.execute();
+			if(!result.empty) {
+				return cast(int)result.front["version"].as!long;
+			}
+		} catch(Exception) {
+		}
+		return 0;
+	}
 
-    void setSchemaVersion(int version_)
-    {
-        conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER)");
-        conn.execute("DELETE FROM schema_version");
-        auto stmt = conn.prepare("INSERT INTO schema_version (version) VALUES (?)");
-        stmt.bind(1, version_);
-        stmt.execute();
-    }
+	void setSchemaVersion(int version_)
+	{
+		conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER)");
+		conn.execute("DELETE FROM schema_version");
+		auto stmt = conn.prepare("INSERT INTO schema_version (version) VALUES (?)");
+		stmt.bind(1, version_);
+		stmt.execute();
+	}
 }

@@ -13,21 +13,20 @@ import mcp.types : ToolResult;
 import utils.process : executeCommand;
 import utils.ctags_parser : CtagsEntry, parseCtagsFile, searchEntries, formatEntry;
 
-class CtagsSearchTool : BaseTool
-{
-    @property string name()
-    {
-        return "ctags_search";
-    }
+class CtagsSearchTool : BaseTool {
+	@property string name()
+	{
+		return "ctags_search";
+	}
 
-    @property string description()
-    {
-        return "Search for symbol definitions across the project using ctags. Automatically generates or regenerates the tags file when needed (if missing or outdated).";
-    }
+	@property string description()
+	{
+		return "Search for symbol definitions across the project using ctags. Automatically generates or regenerates the tags file when needed (if missing or outdated).";
+	}
 
-    @property JSONValue inputSchema()
-    {
-        return parseJSON(`{
+	@property JSONValue inputSchema()
+	{
+		return parseJSON(`{
             "type": "object",
             "properties": {
                 "query": {
@@ -52,145 +51,128 @@ class CtagsSearchTool : BaseTool
             },
             "required": ["query"]
         }`);
-    }
+	}
 
-    ToolResult execute(JSONValue arguments)
-    {
-        try
-        {
-            if (arguments.type != JSONType.object || !("query" in arguments))
-            {
-                return createErrorResult("Missing required 'query' parameter");
-            }
+	ToolResult execute(JSONValue arguments)
+	{
+		try {
+			if(arguments.type != JSONType.object || !("query" in arguments)) {
+				return createErrorResult("Missing required 'query' parameter");
+			}
 
-            string query = arguments["query"].str;
+			string query = arguments["query"].str;
 
-            string projectPath = ".";
-            if ("project_path" in arguments && arguments["project_path"].type == JSONType.string)
-            {
-                projectPath = arguments["project_path"].str;
-            }
+			string projectPath = ".";
+			if("project_path" in arguments && arguments["project_path"].type == JSONType.string) {
+				projectPath = arguments["project_path"].str;
+			}
 
-            projectPath = absolutePath(projectPath);
-            string tagsPath = buildPath(projectPath, "tags");
+			projectPath = absolutePath(projectPath);
+			string tagsPath = buildPath(projectPath, "tags");
 
-            string matchType = "exact";
-            if ("match_type" in arguments && arguments["match_type"].type == JSONType.string)
-            {
-                matchType = arguments["match_type"].str;
-            }
+			string matchType = "exact";
+			if("match_type" in arguments && arguments["match_type"].type == JSONType.string) {
+				matchType = arguments["match_type"].str;
+			}
 
-            string kindFilter;
-            if ("kind" in arguments && arguments["kind"].type == JSONType.string)
-            {
-                kindFilter = arguments["kind"].str;
-            }
+			string kindFilter;
+			if("kind" in arguments && arguments["kind"].type == JSONType.string) {
+				kindFilter = arguments["kind"].str;
+			}
 
-            if (needsRegeneration(projectPath, tagsPath))
-            {
-                string error = generateCtags(projectPath, tagsPath);
-                if (error.length > 0)
-                {
-                    return createErrorResult(error);
-                }
-            }
+			if(needsRegeneration(projectPath, tagsPath)) {
+				string error = generateCtags(projectPath, tagsPath);
+				if(error.length > 0) {
+					return createErrorResult(error);
+				}
+			}
 
-            auto entries = parseCtagsFile(tagsPath);
-            auto results = searchEntries(entries, query, matchType, kindFilter);
+			auto entries = parseCtagsFile(tagsPath);
+			auto results = searchEntries(entries, query, matchType, kindFilter);
 
-            return formatResults(results, query);
-        }
-        catch (Exception e)
-        {
-            return createErrorResult("Error searching ctags: " ~ e.msg);
-        }
-    }
+			return formatResults(results, query);
+		} catch(Exception e) {
+			return createErrorResult("Error searching ctags: " ~ e.msg);
+		}
+	}
 
 private:
-    bool needsRegeneration(string projectPath, string tagsPath)
-    {
-        if (!exists(tagsPath))
-            return true;
+	bool needsRegeneration(string projectPath, string tagsPath)
+	{
+		if(!exists(tagsPath))
+			return true;
 
-        auto tagsTime = timeLastModified(tagsPath);
+		auto tagsTime = timeLastModified(tagsPath);
 
-        auto sourceDir = buildPath(projectPath, "source");
-        if (!exists(sourceDir))
-            return false;
+		auto sourceDir = buildPath(projectPath, "source");
+		if(!exists(sourceDir))
+			return false;
 
-        foreach (entry; dirEntries(sourceDir, "*.d", SpanMode.depth))
-        {
-            if (timeLastModified(entry.name) > tagsTime)
-                return true;
-        }
+		foreach(entry; dirEntries(sourceDir, "*.d", SpanMode.depth)) {
+			if(timeLastModified(entry.name) > tagsTime)
+				return true;
+		}
 
-        return false;
-    }
+		return false;
+	}
 
-    string generateCtags(string projectPath, string tagsPath)
-    {
-        auto sourceDir = buildPath(projectPath, "source");
-        if (!exists(sourceDir))
-        {
-            return "Source directory not found: " ~ sourceDir;
-        }
+	string generateCtags(string projectPath, string tagsPath)
+	{
+		auto sourceDir = buildPath(projectPath, "source");
+		if(!exists(sourceDir)) {
+			return "Source directory not found: " ~ sourceDir;
+		}
 
-        string[] sourceFiles;
-        foreach (entry; dirEntries(sourceDir, "*.d", SpanMode.depth))
-        {
-            sourceFiles ~= entry.name;
-        }
+		string[] sourceFiles;
+		foreach(entry; dirEntries(sourceDir, "*.d", SpanMode.depth)) {
+			sourceFiles ~= entry.name;
+		}
 
-        if (sourceFiles.length == 0)
-        {
-            return "No D source files found in: " ~ sourceDir;
-        }
+		if(sourceFiles.length == 0) {
+			return "No D source files found in: " ~ sourceDir;
+		}
 
-        auto outputApp = appender!string;
-        outputApp ~= "!_TAG_FILE_FORMAT\t2\n";
-        outputApp ~= "!_TAG_FILE_SORTED\t1\n";
-        outputApp ~= "!_TAG_FILE_AUTHOR\tBrian Schott\n";
-        outputApp ~= "!_TAG_PROGRAM_URL\thttps://github.com/dlang-community/D-Scanner/\n";
+		auto outputApp = appender!string;
+		outputApp ~= "!_TAG_FILE_FORMAT\t2\n";
+		outputApp ~= "!_TAG_FILE_SORTED\t1\n";
+		outputApp ~= "!_TAG_FILE_AUTHOR\tBrian Schott\n";
+		outputApp ~= "!_TAG_PROGRAM_URL\thttps://github.com/dlang-community/D-Scanner/\n";
 
-        foreach (file; sourceFiles)
-        {
-            auto result = executeCommand(["dscanner", "--ctags", file]);
-            if (result.status == 0 && result.output.length > 0)
-            {
-                bool hasTags = false;
-                foreach (line; result.output.lineSplitter)
-                {
-                    if (line.strip().length > 0 && line[0] != '!')
-                    {
-                        outputApp ~= line ~ "\n";
-                        hasTags = true;
-                    }
-                }
-            }
-        }
+		foreach(file; sourceFiles) {
+			auto result = executeCommand(["dscanner", "--ctags", file]);
+			if(result.status == 0 && result.output.length > 0) {
+				bool hasTags = false;
+				foreach(line; result.output.lineSplitter) {
+					if(line.strip().length > 0 && line[0] != '!') {
+						outputApp ~= line ~ "\n";
+						hasTags = true;
+					}
+				}
+			}
+		}
 
-        import std.stdio : File;
-        import std.file : write;
-        write(tagsPath, outputApp.data);
+		import std.stdio : File;
+		import std.file : write;
 
-        return null;
-    }
+		write(tagsPath, outputApp.data);
 
-    ToolResult formatResults(CtagsEntry[] results, string query)
-    {
-        if (results.length == 0)
-        {
-            return createTextResult("No symbols found matching '" ~ query ~ "'");
-        }
+		return null;
+	}
 
-        auto outputApp = appender!string;
-        outputApp ~= "Found " ~ text(results.length) ~ " match" ~ (results.length > 1 ? "es" : "") ~ ":\n\n";
+	ToolResult formatResults(CtagsEntry[] results, string query)
+	{
+		if(results.length == 0) {
+			return createTextResult("No symbols found matching '" ~ query ~ "'");
+		}
 
-        foreach (entry; results)
-        {
-            outputApp ~= formatEntry(entry) ~ "\n";
-        }
+		auto outputApp = appender!string;
+		outputApp ~= "Found " ~ text(results.length) ~ " match" ~ (results.length > 1
+				? "es" : "") ~ ":\n\n";
 
-        return createTextResult(outputApp.data);
-    }
+		foreach(entry; results) {
+			outputApp ~= formatEntry(entry) ~ "\n";
+		}
+
+		return createTextResult(outputApp.data);
+	}
 }
