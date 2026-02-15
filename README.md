@@ -40,20 +40,7 @@ Run as an MCP server (for use with Claude, etc.):
 ./bin/dlang_mcp
 ```
 
-#Usage
-
-```sh
-# Full setup (recommended)
-./setup.sh
-# Minimal setup (TF-IDF only)
-./setup.sh --skip-onnx
-# Just build, no packages
-./setup.sh --skip-packages
-# Test search
-./bin/dlang_mcp --test-search "hash table lookup"
-# Run MCP server
-./bin/dlang_mcp## Command Line
-```
+### Command Line
 
 ```bash
 # Initialize the search database
@@ -74,11 +61,32 @@ Run as an MCP server (for use with Claude, etc.):
 # Show ingestion progress
 ./bin/dlang_mcp --ingest-status
 
+# Build vector embeddings
+./bin/dlang_mcp --train-embeddings
+
 # Mine usage patterns from indexed data
 ./bin/dlang_mcp --mine-patterns
 
 # Show help
 ./bin/dlang_mcp --help
+```
+
+#### setup.sh helper
+```bash
+# Full setup (recommended)
+./setup.sh
+
+# Minimal setup (TF-IDF only)
+./setup.sh --skip-onnx
+
+# Just build, no packages
+./setup.sh --skip-packages
+
+# Test search
+./bin/dlang_mcp --test-search "hash table lookup"
+
+# Run MCP server
+./bin/dlang_mcp## Command Line
 ```
 
 ### MCP Client Configuration
@@ -294,42 +302,62 @@ dlang_mcp/
 ├── source/
 │   ├── app.d              # Entry point
 │   ├── mcp/               # MCP protocol
+│   │   ├── package.d
 │   │   ├── server.d       # MCP server
-│   │   ├── transport.d   # stdio transport
+│   │   ├── transport.d    # stdio transport
 │   │   ├── types.d        # JSON-RPC types
-│   │   └── protocol.d    # Request handling
+│   │   └── protocol.d     # Request handling
 │   ├── tools/             # MCP tools
-│   │   ├── dscanner.d    # Code analysis
-│   │   ├── dfmt.d        # Formatting
-│   │   ├── ctags.d       # Symbol search
+│   │   ├── package.d
+│   │   ├── base.d         # Tool interface
+│   │   ├── search_base.d  # Search tool base class
+│   │   ├── dscanner.d     # Code analysis
+│   │   ├── dfmt.d         # Formatting
+│   │   ├── ctags.d        # Symbol search
 │   │   ├── package_search.d
 │   │   ├── function_search.d
 │   │   ├── type_search.d
 │   │   ├── example_search.d
 │   │   └── import_tool.d
 │   ├── storage/           # Database layer
-│   │   ├── connection.d  # SQLite wrapper
-│   │   ├── schema.d      # Table definitions
-│   │   ├── crud.d        # CRUD operations
-│   │   └── search.d      # Hybrid search
+│   │   ├── package.d
+│   │   ├── connection.d   # SQLite wrapper
+│   │   ├── schema.d       # Table definitions
+│   │   ├── crud.d         # CRUD operations
+│   │   └── search.d       # Hybrid search
 │   ├── ingestion/         # Data pipeline
-│   │   ├── dub_crawler.d # code.dlang.org crawler
-│   │   ├── pipeline.d    # Ingestion orchestration
-│   │   ├── ddoc_parser.d # D documentation parser
+│   │   ├── package.d
+│   │   ├── dub_crawler.d  # code.dlang.org crawler
+│   │   ├── pipeline.d     # Ingestion orchestration
+│   │   ├── ddoc_parser.d  # D documentation parser
+│   │   ├── enhanced_parser.d
+│   │   ├── http_client.d
 │   │   └── pattern_miner.d
 │   ├── embeddings/        # Vector embeddings
+│   │   ├── package.d
+│   │   ├── embedder.d     # Interface
 │   │   ├── tfidf_embedder.d
 │   │   ├── onnx_embedder.d
 │   │   └── manager.d
-│   └── models/             # Data structures
-│       └── types.d
+│   ├── models/            # Data structures
+│   │   ├── package.d
+│   │   └── types.d
+│   └── utils/             # Utilities
+│       ├── ctags_parser.d
+│       ├── process.d       # Command execution
+│       └── logging.d
 ├── tests/                 # Test suite
+│   ├── runner.d
+│   └── unit/
+│       ├── test_embeddings.d
+│       ├── test_parser.d
+│       └── test_storage.d
 ├── data/                  # Runtime data
-│   ├── search.db         # SQLite database
-│   ├── cache/            # Package cache
-│   └── models/           # Extensions and models
-│       ├── vec0.so       # sqlite-vec extension
-│       └── model.onnx    # ONNX model (optional)
+│   ├── search.db          # SQLite database
+│   ├── cache/             # Package cache
+│   └── models/            # Extensions and models
+│       ├── vec0.so        # sqlite-vec extension
+│       └── model.onnx     # ONNX model (optional)
 └── dub.json
 ```
 
