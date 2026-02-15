@@ -40,7 +40,20 @@ Run as an MCP server (for use with Claude, etc.):
 ./bin/dlang_mcp
 ```
 
-### Command Line
+#Usage
+
+```sh
+# Full setup (recommended)
+./setup.sh
+# Minimal setup (TF-IDF only)
+./setup.sh --skip-onnx
+# Just build, no packages
+./setup.sh --skip-packages
+# Test search
+./bin/dlang_mcp --test-search "hash table lookup"
+# Run MCP server
+./bin/dlang_mcp## Command Line
+```
 
 ```bash
 # Initialize the search database
@@ -198,26 +211,81 @@ This analyzes import combinations and function relationships to provide better s
 
 ## Example Usage
 
-### Quick Start
+### Quick Start Guide
+
+#### Option 1: Minimal Setup (TF-IDF only)
+
+Basic keyword search - no external dependencies required.
 
 ```bash
 # 1. Build
 dub build
 
-# 2. Install sqlite-vec for vector search
-cd /tmp && git clone https://github.com/asg017/sqlite-vec && cd sqlite-vec && make loadable
-cp dist/vec0.so /path/to/dlang_mcp/data/models/
-
-# 3. Initialize database
+# 2. Initialize database
 ./bin/dlang_mcp --init-db
 
-# 4. Index some packages
-./bin/dlang_mcp --ingest silly
+# 3. Ingest packages
+./bin/dlang_mcp --ingest phobos
 ./bin/dlang_mcp --ingest intel-intrinsics
+
+# 4. Train TF-IDF embeddings
+./bin/dlang_mcp --train-embeddings
 
 # 5. Run MCP server
 ./bin/dlang_mcp
 ```
+
+#### Option 2: Full Setup (Semantic Search with ONNX)
+
+Neural embeddings for better semantic understanding.
+
+```bash
+# 1. Build
+dub build
+
+# 2. Install sqlite-vec for vector similarity
+cd /tmp && git clone --depth 1 https://github.com/asg017/sqlite-vec && cd sqlite-vec && make loadable
+mkdir -p /path/to/dlang_mcp/data/models
+cp dist/vec0.so /path/to/dlang_mcp/data/models/
+
+# 3. Install ONNX Runtime
+cd /tmp
+wget https://github.com/microsoft/onnxruntime/releases/download/v1.18.0/onnxruntime-linux-x64-1.18.0.tgz
+tar xzf onnxruntime-linux-x64-1.18.0.tgz
+mkdir -p /path/to/dlang_mcp/lib
+cp onnxruntime-linux-x64-1.18.0/lib/libonnxruntime.so.1.18.0 /path/to/dlang_mcp/lib/
+cd /path/to/dlang_mcp/lib && ln -sf libonnxruntime.so.1.18.0 onnxruntime.so
+
+# 4. Download ONNX model and vocabulary
+cd /path/to/dlang_mcp
+wget -O data/models/model.onnx \
+  https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx
+wget -O data/models/vocab.txt \
+  https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/raw/main/vocab.txt
+
+# 5. Initialize and ingest
+./bin/dlang_mcp --init-db
+./bin/dlang_mcp --ingest phobos
+./bin/dlang_mcp --ingest intel-intrinsics
+
+# 6. Train embeddings and mine patterns
+./bin/dlang_mcp --train-embeddings
+./bin/dlang_mcp --mine-patterns
+
+# 7. Test search
+./bin/dlang_mcp --test-search "hash table lookup"
+
+# 8. Run MCP server
+./bin/dlang_mcp
+```
+
+#### One-Command Setup
+
+```bash
+chmod +x setup.sh && ./setup.sh
+```
+
+This installs all optional components and ingests example packages.
 
 ## Project Structure
 
