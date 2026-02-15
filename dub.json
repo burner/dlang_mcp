@@ -1,9 +1,30 @@
 {
 	"name": "dlang_mcp",
-	"description": "MCP server exposing dscanner and dfmt tools",
+	"description": "MCP server for D language tools with semantic package search",
 	"authors": ["burner"],
 	"copyright": "Copyright © 2026, burner",
 	"license": "MIT",
 	"targetType": "executable",
-	"targetName": "dlang_mcp"
+	"targetName": "dlang_mcp",
+	"targetPath": "bin",
+	"dependencies": {
+		"d2sqlite3": "~>1.0.0",
+		"bindbc-onnxruntime": "~>1.2.0"
+	},
+	"lflags-linux": ["-rpath", "$$ORIGIN/../lib"],
+	"configurations": [
+		{
+			"name": "default",
+			"targetName": "dlang_mcp"
+		},
+		{
+			"name": "test",
+			"targetType": "executable",
+			"sourcePaths": ["source", "tests"],
+			"importPaths": ["source", "tests"],
+			"mainSourceFile": "tests/runner.d",
+			"targetName": "dlang_mcp_test",
+			"versions": ["TestMode"]
+		}
+	]
 }
