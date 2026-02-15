@@ -2,6 +2,13 @@
 
 MCP (Model Context Protocol) server for D language tools with semantic package search.
 
+## Status
+- mostly vibe coded in a day
+- only tested on linux
+- PR's welcome
+- actually not really sure if correctly used by the LLM or really useful
+- if you have something better, please tell me
+
 ## Features
 
 ### Code Analysis Tools
@@ -96,6 +103,19 @@ For Claude Desktop, add to `~/.config/claude/claude_desktop_config.json`:
   "mcpServers": {
     "dlang": {
       "command": "/path/to/dlang_mcp"
+    }
+  }
+}
+```
+
+For opencode, add to `~/.config/opencode/opencode.json`:
+```json
+{
+  "mcp": {
+    "dlang-mcp": {
+      "type": "local",
+      "command": ["/home/burner/Workspace/D/dlang_mcp/bin/dlang_mcp"],
+      "enabled": true
     }
   }
 }
