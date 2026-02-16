@@ -47,8 +47,19 @@ Run as an MCP server (for use with Claude, etc.):
 ./bin/dlang_mcp
 ```
 
-### Command Line
+### Setup Script
+```bash
+# Full setup (recommended)
+./setup.sh
 
+# Minimal setup (TF-IDF only)
+./setup.sh --skip-onnx
+
+# Just build, no packages
+./setup.sh --skip-packages
+```
+
+### Command Line
 ```bash
 # Initialize the search database
 ./bin/dlang_mcp --init-db
@@ -79,19 +90,6 @@ Run as an MCP server (for use with Claude, etc.):
 
 # Show help
 ./bin/dlang_mcp --help
-```
-
-### Setup Script
-
-```bash
-# Full setup (recommended)
-./setup.sh
-
-# Minimal setup (TF-IDF only)
-./setup.sh --skip-onnx
-
-# Just build, no packages
-./setup.sh --skip-packages
 ```
 
 ### MCP Client Configuration
