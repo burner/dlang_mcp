@@ -1,3 +1,9 @@
+/**
+ * MCP tool for searching D packages in the documentation database.
+ *
+ * Queries the hybrid search engine to find D packages matching a query
+ * by name, description, or tags.
+ */
 module tools.package_search;
 
 import std.json : JSONValue, parseJSON, JSONType;
@@ -7,6 +13,12 @@ import mcp.types : ToolResult;
 import storage.crud;
 import storage.search;
 
+/**
+ * Tool that searches for D packages by name, description, or tags.
+ *
+ * Returns matching packages with their metadata including descriptions,
+ * authors, licenses, and relevance scores.
+ */
 class PackageSearchTool : SearchTool {
 	@property string name()
 	{

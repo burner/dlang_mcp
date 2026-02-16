@@ -1,3 +1,9 @@
+/**
+ * CRUD operations for the D package documentation database.
+ *
+ * Provides insert, query, and full-text-search index operations for packages,
+ * modules, functions, types, code examples, and their vector embeddings.
+ */
 module storage.crud;
 
 import storage.connection;
@@ -13,14 +19,35 @@ private bool isNotNull(ColumnData col)
 	return col.type != SqliteType.NULL;
 }
 
+/**
+ * Database access layer for all entity CRUD operations.
+ *
+ * Wraps a `DBConnection` and provides typed insert/query methods for every
+ * entity in the schema: packages, modules, functions, types, code examples,
+ * embeddings, and full-text-search indexes.
+ */
 class CRUDOperations {
 	private DBConnection conn;
 
+	/**
+	 * Constructs the CRUD operations layer.
+	 *
+	 * Params:
+	 *     conn = The database connection to execute queries on.
+	 */
 	this(DBConnection conn)
 	{
 		this.conn = conn;
 	}
 
+	/**
+	 * Inserts or replaces a package record in the database.
+	 *
+	 * Params:
+	 *     pkg = The package metadata to store.
+	 *
+	 * Returns: The row ID of the inserted or replaced package.
+	 */
 	long insertPackage(PackageMetadata pkg)
 	{
 		auto stmt = conn.prepare("
@@ -42,6 +69,16 @@ class CRUDOperations {
 		return conn.lastInsertRowid();
 	}
 
+	/**
+	 * Retrieves a package by name.
+	 *
+	 * Params:
+	 *     name = The unique package name.
+	 *
+	 * Returns: The deserialized `PackageMetadata`.
+	 *
+	 * Throws: `Exception` if the package is not found.
+	 */
 	PackageMetadata getPackage(string name)
 	{
 		auto stmt = conn.prepare("SELECT * FROM packages WHERE name = ?");
@@ -55,6 +92,14 @@ class CRUDOperations {
 		return parsePackageRow(result.front);
 	}
 
+	/**
+	 * Deserializes a database row into a `PackageMetadata` struct.
+	 *
+	 * Params:
+	 *     row = A database row from the packages table.
+	 *
+	 * Returns: A populated `PackageMetadata`.
+	 */
 	PackageMetadata parsePackageRow(Row row)
 	{
 		PackageMetadata pkg;
@@ -81,6 +126,14 @@ class CRUDOperations {
 		return pkg;
 	}
 
+	/**
+	 * Looks up a package ID by name.
+	 *
+	 * Params:
+	 *     name = The package name.
+	 *
+	 * Returns: The package row ID, or -1 if not found.
+	 */
 	long getPackageId(string name)
 	{
 		auto stmt = conn.prepare("SELECT id FROM packages WHERE name = ?");
@@ -94,6 +147,7 @@ class CRUDOperations {
 		return result.front["id"].as!long;
 	}
 
+	/** Returns an alphabetically sorted list of all package names in the database. */
 	string[] getAllPackageNames()
 	{
 		auto stmt = conn.prepare("SELECT name FROM packages ORDER BY name");
@@ -106,6 +160,15 @@ class CRUDOperations {
 		return names;
 	}
 
+	/**
+	 * Inserts or replaces a module record under a package.
+	 *
+	 * Params:
+	 *     packageId = The parent package row ID.
+	 *     mod = The module documentation to store.
+	 *
+	 * Returns: The row ID of the inserted module.
+	 */
 	long insertModule(long packageId, ModuleDoc mod)
 	{
 		auto stmt = conn.prepare("
@@ -123,6 +186,14 @@ class CRUDOperations {
 		return conn.lastInsertRowid();
 	}
 
+	/**
+	 * Looks up a module ID by its fully qualified path.
+	 *
+	 * Params:
+	 *     fullPath = The dot-separated module path (e.g. "std.algorithm").
+	 *
+	 * Returns: The module row ID, or -1 if not found.
+	 */
 	long getModuleId(string fullPath)
 	{
 		auto stmt = conn.prepare("SELECT id FROM modules WHERE full_path = ?");
@@ -136,6 +207,18 @@ class CRUDOperations {
 		return result.front["id"].as!long;
 	}
 
+	/**
+	 * Inserts or replaces a function record under a module.
+	 *
+	 * Stores the function's signature, documentation, parameters, examples,
+	 * and performance attributes (nogc, nothrow, pure, safe).
+	 *
+	 * Params:
+	 *     moduleId = The parent module row ID.
+	 *     func = The function documentation to store.
+	 *
+	 * Returns: The row ID of the inserted function.
+	 */
 	long insertFunction(long moduleId, FunctionDoc func)
 	{
 		auto stmt = conn.prepare("
@@ -166,6 +249,14 @@ class CRUDOperations {
 		return conn.lastInsertRowid();
 	}
 
+	/**
+	 * Looks up a function ID by its fully qualified name.
+	 *
+	 * Params:
+	 *     fqn = The fully qualified function name.
+	 *
+	 * Returns: The function row ID, or -1 if not found.
+	 */
 	long getFunctionId(string fqn)
 	{
 		auto stmt = conn.prepare("SELECT id FROM functions WHERE fully_qualified_name = ?");
@@ -179,6 +270,16 @@ class CRUDOperations {
 		return result.front["id"].as!long;
 	}
 
+	/**
+	 * Retrieves a function by its row ID, including parent module and package names.
+	 *
+	 * Params:
+	 *     id = The function row ID.
+	 *
+	 * Returns: A populated `FunctionDoc`.
+	 *
+	 * Throws: `Exception` if the function is not found.
+	 */
 	FunctionDoc getFunction(long id)
 	{
 		auto stmt = conn.prepare("
@@ -198,6 +299,14 @@ class CRUDOperations {
 		return parseFunctionRow(result.front);
 	}
 
+	/**
+	 * Deserializes a database row into a `FunctionDoc` struct.
+	 *
+	 * Params:
+	 *     row = A database row from a functions query with joined module/package columns.
+	 *
+	 * Returns: A populated `FunctionDoc`.
+	 */
 	FunctionDoc parseFunctionRow(Row row)
 	{
 		FunctionDoc func;
@@ -233,6 +342,15 @@ class CRUDOperations {
 		return func;
 	}
 
+	/**
+	 * Inserts or replaces a type record under a module.
+	 *
+	 * Params:
+	 *     moduleId = The parent module row ID.
+	 *     type = The type documentation to store.
+	 *
+	 * Returns: The row ID of the inserted type.
+	 */
 	long insertType(long moduleId, TypeDoc type)
 	{
 		auto stmt = conn.prepare("
@@ -253,6 +371,14 @@ class CRUDOperations {
 		return conn.lastInsertRowid();
 	}
 
+	/**
+	 * Looks up a type ID by its fully qualified name.
+	 *
+	 * Params:
+	 *     fqn = The fully qualified type name.
+	 *
+	 * Returns: The type row ID, or -1 if not found.
+	 */
 	long getTypeId(string fqn)
 	{
 		auto stmt = conn.prepare("SELECT id FROM types WHERE fully_qualified_name = ?");
@@ -266,6 +392,15 @@ class CRUDOperations {
 		return result.front["id"].as!long;
 	}
 
+	/**
+	 * Inserts a code example linked to a function, type, or package.
+	 *
+	 * Params:
+	 *     example = The code example to store; its functionId, typeId, or
+	 *               packageId determines the parent entity.
+	 *
+	 * Returns: The row ID of the inserted example.
+	 */
 	long insertCodeExample(CodeExample example)
 	{
 		auto stmt = conn.prepare("
@@ -300,6 +435,14 @@ class CRUDOperations {
 		return conn.lastInsertRowid();
 	}
 
+	/**
+	 * Retrieves runnable code examples associated with a function.
+	 *
+	 * Params:
+	 *     functionId = The function row ID.
+	 *
+	 * Returns: An array of `CodeExample` structs, with unittests ordered first.
+	 */
 	CodeExample[] getCodeExamplesForFunction(long functionId)
 	{
 		auto stmt = conn.prepare("
@@ -318,6 +461,14 @@ class CRUDOperations {
 		return examples;
 	}
 
+	/**
+	 * Deserializes a database row into a `CodeExample` struct.
+	 *
+	 * Params:
+	 *     row = A database row from the code_examples table.
+	 *
+	 * Returns: A populated `CodeExample`.
+	 */
 	CodeExample parseCodeExampleRow(Row row)
 	{
 		CodeExample ex;
@@ -340,14 +491,16 @@ class CRUDOperations {
 		return ex;
 	}
 
+	/** Aggregate row counts for each entity table in the database. */
 	struct DBStats {
-		long packageCount;
-		long moduleCount;
-		long functionCount;
-		long typeCount;
-		long exampleCount;
+		long packageCount; /** Number of stored packages. */
+		long moduleCount; /** Number of stored modules. */
+		long functionCount; /** Number of stored functions. */
+		long typeCount; /** Number of stored types. */
+		long exampleCount; /** Number of stored code examples. */
 	}
 
+	/** Queries the database and returns row counts for all entity tables. */
 	DBStats getStats()
 	{
 		DBStats stats;
@@ -370,21 +523,49 @@ class CRUDOperations {
 		return stats;
 	}
 
+	/**
+	 * Stores a vector embedding for a package.
+	 *
+	 * Params:
+	 *     packageId = The package row ID.
+	 *     embedding = The float vector to store.
+	 */
 	void storePackageEmbedding(long packageId, float[] embedding)
 	{
 		storeEmbedding("vec_packages", "package_id", packageId, embedding);
 	}
 
+	/**
+	 * Stores a vector embedding for a function.
+	 *
+	 * Params:
+	 *     functionId = The function row ID.
+	 *     embedding = The float vector to store.
+	 */
 	void storeFunctionEmbedding(long functionId, float[] embedding)
 	{
 		storeEmbedding("vec_functions", "function_id", functionId, embedding);
 	}
 
+	/**
+	 * Stores a vector embedding for a type.
+	 *
+	 * Params:
+	 *     typeId = The type row ID.
+	 *     embedding = The float vector to store.
+	 */
 	void storeTypeEmbedding(long typeId, float[] embedding)
 	{
 		storeEmbedding("vec_types", "type_id", typeId, embedding);
 	}
 
+	/**
+	 * Stores a vector embedding for a code example.
+	 *
+	 * Params:
+	 *     exampleId = The code example row ID.
+	 *     embedding = The float vector to store.
+	 */
 	void storeExampleEmbedding(long exampleId, float[] embedding)
 	{
 		storeEmbedding("vec_examples", "example_id", exampleId, embedding);
@@ -416,6 +597,20 @@ class CRUDOperations {
 		stmt.execute();
 	}
 
+	/**
+	 * Updates the FTS5 full-text index for a function.
+	 *
+	 * Params:
+	 *     functionId = The function row ID.
+	 *     packageId = The parent package row ID.
+	 *     name = The function name.
+	 *     fqn = The fully qualified name.
+	 *     signature = The function signature.
+	 *     docComment = The documentation comment text.
+	 *     parameters = The parameter list.
+	 *     examples = Code examples associated with the function.
+	 *     packageName = The parent package name.
+	 */
 	void updateFtsFunction(long functionId, long packageId, string name, string fqn, string signature,
 			string docComment, string[] parameters, string[] examples, string packageName)
 	{
@@ -435,6 +630,18 @@ class CRUDOperations {
 		stmt.execute();
 	}
 
+	/**
+	 * Updates the FTS5 full-text index for a type.
+	 *
+	 * Params:
+	 *     typeId = The type row ID.
+	 *     packageId = The parent package row ID.
+	 *     name = The type name.
+	 *     fqn = The fully qualified name.
+	 *     kind = The type kind (class, struct, enum, interface).
+	 *     docComment = The documentation comment text.
+	 *     packageName = The parent package name.
+	 */
 	void updateFtsType(long typeId, long packageId, string name, string fqn,
 			string kind, string docComment, string packageName)
 	{
@@ -452,6 +659,16 @@ class CRUDOperations {
 		stmt.execute();
 	}
 
+	/**
+	 * Updates the FTS5 full-text index for a code example.
+	 *
+	 * Params:
+	 *     exampleId = The code example row ID.
+	 *     code = The example source code.
+	 *     description = Human-readable description of the example.
+	 *     functionName = The name of the associated function, if any.
+	 *     packageName = The parent package name.
+	 */
 	void updateFtsExample(long exampleId, string code, string description,
 			string functionName, string packageName)
 	{
@@ -468,6 +685,15 @@ class CRUDOperations {
 		stmt.execute();
 	}
 
+	/**
+	 * Retrieves all document texts from the database for embedding training.
+	 *
+	 * Collects text from packages (name, description, tags) and code examples
+	 * (code, description) to build a training corpus for TF-IDF or other
+	 * embedding models.
+	 *
+	 * Returns: An array of concatenated text strings, one per document.
+	 */
 	string[] getAllDocumentTexts()
 	{
 		string[] texts;
@@ -479,6 +705,26 @@ class CRUDOperations {
 				text ~= " " ~ row["description"].as!string;
 			if(isNotNull(row["tags"]))
 				text ~= " " ~ row["tags"].as!string;
+			texts ~= text;
+		}
+
+		auto funcStmt = conn.prepare("SELECT name, signature, doc_comment FROM functions");
+		foreach(row; funcStmt.execute()) {
+			string text = row["name"].as!string;
+			if(isNotNull(row["signature"]))
+				text ~= " " ~ row["signature"].as!string;
+			if(isNotNull(row["doc_comment"]))
+				text ~= " " ~ row["doc_comment"].as!string;
+			texts ~= text;
+		}
+
+		auto typeStmt = conn.prepare("SELECT name, kind, doc_comment FROM types");
+		foreach(row; typeStmt.execute()) {
+			string text = row["name"].as!string;
+			if(isNotNull(row["kind"]))
+				text ~= " " ~ row["kind"].as!string;
+			if(isNotNull(row["doc_comment"]))
+				text ~= " " ~ row["doc_comment"].as!string;
 			texts ~= text;
 		}
 

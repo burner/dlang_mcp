@@ -1,3 +1,10 @@
+/**
+ * MCP tool for static analysis of D source code using D-Scanner.
+ *
+ * Provides access to D-Scanner's analysis capabilities including linting,
+ * syntax checking, line counting, import listing, AST generation, symbol
+ * declaration lookup, syntax highlighting, and reporting.
+ */
 module tools.dscanner;
 
 import std.json : JSONValue, parseJSON, JSONType;
@@ -10,27 +17,36 @@ import tools.base : BaseTool;
 import mcp.types : ToolResult;
 import utils.process : executeCommand, executeCommandWithInput;
 
+/** Available D-Scanner analysis modes. */
 enum DscannerMode {
-	lint,
-	syntaxCheck,
-	sloc,
-	tokenCount,
-	imports,
-	recursiveImports,
-	ctags,
-	ast,
-	declaration,
-	highlight,
-	report
+	lint, /// Static analysis with configurable check presets.
+	syntaxCheck, /// Syntax-only validation.
+	sloc, /// Source lines of code counting.
+	tokenCount, /// Token counting.
+	imports, /// List direct imports.
+	recursiveImports, /// List all transitive imports.
+	ctags, /// Generate ctags output.
+	ast, /// Generate abstract syntax tree.
+	declaration, /// Find symbol declarations.
+	highlight, /// Syntax highlighting.
+	report /// Full analysis report.
 }
 
+/** Preset configurations for D-Scanner lint checks. */
 enum CheckPreset {
-	default_,
-	strict,
-	minimal,
-	custom
+	default_, /// Standard set of checks.
+	strict, /// All checks enabled.
+	minimal, /// Only critical checks.
+	custom /// User-provided configuration file.
 }
 
+/**
+ * Tool that runs D-Scanner analysis on D source code.
+ *
+ * Accepts source code (inline or via file path), an analysis mode, and
+ * optional configuration such as check presets, import paths, and error
+ * output format.
+ */
 class DscannerTool : BaseTool {
 	@property string name()
 	{

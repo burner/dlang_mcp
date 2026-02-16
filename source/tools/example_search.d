@@ -1,3 +1,9 @@
+/**
+ * MCP tool for searching D code examples in the documentation database.
+ *
+ * Queries the search database for code examples matching a description
+ * or code content, returning runnable examples with their import requirements.
+ */
 module tools.example_search;
 
 import std.json : JSONValue, parseJSON, JSONType;
@@ -7,6 +13,12 @@ import mcp.types : ToolResult;
 import storage.crud;
 import storage.search;
 
+/**
+ * Tool that searches for D code examples by description or code content.
+ *
+ * Returns matching examples with source code, descriptions, required imports,
+ * and metadata about runnability and associated functions/types.
+ */
 class ExampleSearchTool : SearchTool {
 	@property string name()
 	{

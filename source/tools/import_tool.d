@@ -1,3 +1,9 @@
+/**
+ * MCP tool for resolving import statements for D symbols.
+ *
+ * Looks up symbols in the documentation database and returns the
+ * import statements needed to use them.
+ */
 module tools.import_tool;
 
 import std.json : JSONValue, parseJSON, JSONType;
@@ -7,6 +13,12 @@ import mcp.types : ToolResult;
 import storage.crud;
 import storage.search;
 
+/**
+ * Tool that resolves the required import statements for D symbols.
+ *
+ * Accepts a single symbol name or a list of symbol names and returns
+ * the corresponding `import` statements needed to use them.
+ */
 class ImportTool : SearchTool {
 	@property string name()
 	{

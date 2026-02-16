@@ -1,19 +1,45 @@
+/**
+ * Database schema management for the D package documentation store.
+ *
+ * Creates and maintains all SQLite tables, indexes, FTS5 virtual tables,
+ * and optional sqlite-vec vector tables used by the MCP server.
+ */
 module storage.schema;
 
 import storage.connection;
 import std.stdio;
 import std.format;
 
+/**
+ * Manages the database schema lifecycle.
+ *
+ * Handles initial table creation, index setup, FTS5 full-text search tables,
+ * and optional vector similarity tables (when sqlite-vec is available).
+ * Supports schema versioning for future migrations.
+ */
 class SchemaManager {
 	private DBConnection conn;
 	private int vectorDimensions;
 
+	/**
+	 * Constructs a schema manager.
+	 *
+	 * Params:
+	 *     conn = The database connection to execute DDL statements on.
+	 *     vectorDimensions = The dimensionality of vector embeddings (default 384).
+	 */
 	this(DBConnection conn, int vectorDimensions = 384)
 	{
 		this.conn = conn;
 		this.vectorDimensions = vectorDimensions;
 	}
 
+	/**
+	 * Creates all database tables, indexes, and virtual tables.
+	 *
+	 * Idempotent — uses `CREATE TABLE IF NOT EXISTS` throughout. Enables
+	 * vector tables only when the sqlite-vec extension is loaded.
+	 */
 	void initializeSchema()
 	{
 		writeln("Initializing database schema...");
@@ -307,6 +333,11 @@ class SchemaManager {
 				"CREATE INDEX IF NOT EXISTS idx_examples_package ON code_examples(package_id)");
 	}
 
+	/**
+	 * Reads the current schema version from the database.
+	 *
+	 * Returns: The version integer, or 0 if the version table does not exist.
+	 */
 	int getSchemaVersion()
 	{
 		try {
@@ -320,6 +351,14 @@ class SchemaManager {
 		return 0;
 	}
 
+	/**
+	 * Persists the given schema version to the database.
+	 *
+	 * Creates the version table if it does not exist, then replaces the stored version.
+	 *
+	 * Params:
+	 *     version_ = The schema version number to store.
+	 */
 	void setSchemaVersion(int version_)
 	{
 		conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER)");

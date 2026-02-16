@@ -1,3 +1,6 @@
+/**
+ * Embedding subsystem providing text-to-vector conversion backends.
+ */
 module embeddings;
 
 public import embeddings.embedder;

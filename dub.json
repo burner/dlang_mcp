@@ -17,6 +17,7 @@
 		{
 			"name": "default",
 			"targetName": "dlang_mcp",
+			"mainSourceFile": "source/app.d",
 			"versions": ["VibeDisableCommandLineParsing"]
 		},
 		{

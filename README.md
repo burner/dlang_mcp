@@ -15,6 +15,7 @@ MCP (Model Context Protocol) server for D language tools with semantic package s
 - **dscanner** - Static code analysis for D
 - **dfmt** - Code formatting
 - **ctags_search** - Symbol definition search
+- **ddoc_analyze** - Project-wide DDoc documentation analysis via DMD JSON
 
 ### Semantic Search Tools
 - **search_packages** - Search D packages by name/description
@@ -330,6 +331,7 @@ dlang_mcp/
 │   │   ├── dscanner.d     # Code analysis
 │   │   ├── dfmt.d         # Formatting
 │   │   ├── ctags.d        # Symbol search
+│   │   ├── ddoc_analyze.d # DDoc project analysis
 │   │   ├── package_search.d
 │   │   ├── function_search.d
 │   │   ├── type_search.d
@@ -345,8 +347,7 @@ dlang_mcp/
 │   │   ├── package.d
 │   │   ├── dub_crawler.d  # code.dlang.org crawler
 │   │   ├── pipeline.d     # Ingestion orchestration
-│   │   ├── ddoc_parser.d  # D documentation parser
-│   │   ├── enhanced_parser.d
+│   │   ├── ddoc_project_parser.d  # DMD JSON parser (functions, types, unittests)
 │   │   ├── http_client.d
 │   │   └── pattern_miner.d
 │   ├── embeddings/        # Vector embeddings
@@ -364,10 +365,16 @@ dlang_mcp/
 │       └── logging.d
 ├── tests/                 # Test suite
 │   ├── runner.d
-│   └── unit/
-│       ├── test_embeddings.d
-│       ├── test_parser.d
-│       └── test_storage.d
+│   ├── unit/
+│   │   ├── test_protocol.d
+│   │   ├── test_mcp_types.d
+│   │   ├── test_ctags_parser.d
+│   │   ├── test_server.d
+│   │   ├── test_embeddings.d
+│   │   ├── test_parser.d
+│   │   └── test_storage.d
+│   └── integration/
+│       └── test_e2e_pipeline.d
 ├── data/                  # Runtime data
 │   ├── search.db          # SQLite database
 │   ├── cache/             # Package cache
@@ -379,7 +386,10 @@ dlang_mcp/
 
 ## Database Schema
 
-The database uses:
+The ingestion pipeline uses DMD's `-X` JSON output to extract full function signatures,
+type definitions, doc comments, performance attributes (`@safe`, `@nogc`, `nothrow`, `pure`),
+and unittest blocks from each package. All of this is stored in:
+
 - **Core tables**: packages, modules, functions, types, code_examples
 - **FTS5 tables**: Full-text search for packages, functions, types, examples
 - **Vector tables**: sqlite-vec for semantic similarity (when available)
@@ -396,9 +406,21 @@ The database uses:
 
 ## Testing
 
+Build and run the full test suite:
+
 ```bash
-dub run --config=test
+dub build --config=test
+./bin/dlang_mcp_test
 ```
+
+Or in one step:
+
+```bash
+dub run --configuration=test
+```
+
+The test suite covers protocol parsing, MCP types, ctags parsing, server dispatch,
+storage CRUD, D source parser, TF-IDF embeddings, and an end-to-end ingestion pipeline.
 
 ## Architecture
 
@@ -432,7 +454,8 @@ dub run --config=test
 ┌──────┴───────────────────────────┐
 │        Ingestion Pipeline          │
 │  ┌──────────┐  ┌──────────┐       │
-│  │ Crawler  │→ │  Parser  │       │
+│  │ Crawler  │→ │DMD JSON  │       │
+│  │          │  │ Parser   │       │
 │  └──────────┘  └──────────┘       │
 │  ┌──────────┐  ┌──────────┐       │
 │  │ Embedder │→ │  Miner   │       │

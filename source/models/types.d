@@ -1,3 +1,10 @@
+/**
+ * Domain model types for the D language documentation and search system.
+ *
+ * Defines the data structures used to represent packages, modules, functions,
+ * types, code examples, and search results throughout the ingestion pipeline,
+ * storage layer, and search tools.
+ */
 module models.types;
 
 import std.json;
@@ -5,16 +12,24 @@ import std.algorithm;
 import std.array;
 import std.conv;
 
+/** Metadata for a D package from the DUB registry. */
 struct PackageMetadata {
-	string name;
-	string version_;
-	string description;
-	string repository;
-	string homepage;
-	string license;
-	string[] authors;
-	string[] tags;
+	string name; /// The package name (e.g. "vibe-d").
+	string version_; /// The latest or specified version string.
+	string description; /// Brief description of the package.
+	string repository; /// URL of the source repository.
+	string homepage; /// URL of the project homepage.
+	string license; /// License identifier (e.g. "MIT", "BSL-1.0").
+	string[] authors; /// List of package authors.
+	string[] tags; /// Categorization tags.
 
+	/**
+	 * Serializes this package metadata to a JSON object.
+	 *
+	 * Only includes non-empty fields in the output.
+	 *
+	 * Returns: A `JSONValue` containing the package metadata.
+	 */
 	JSONValue toJSON() const
 	{
 		JSONValue[string] obj;
@@ -43,6 +58,17 @@ struct PackageMetadata {
 		return JSONValue(obj);
 	}
 
+	/**
+	 * Deserializes package metadata from a DUB registry JSON response.
+	 *
+	 * Handles both flat JSON objects and nested `info` objects as returned
+	 * by different DUB API endpoints.
+	 *
+	 * Params:
+	 *     json = The JSON object to parse.
+	 *
+	 * Returns: A populated `PackageMetadata` struct.
+	 */
 	static PackageMetadata fromJSON(JSONValue json)
 	{
 		PackageMetadata pkg;
@@ -78,90 +104,99 @@ struct PackageMetadata {
 	}
 }
 
+/** Documentation for a D module, including its contained functions and types. */
 struct ModuleDoc {
-	string name;
-	string packageName;
-	string docComment;
-	FunctionDoc[] functions;
-	TypeDoc[] types;
+	string name; /// Fully qualified module name (e.g. "std.algorithm.searching").
+	string packageName; /// The package this module belongs to.
+	string docComment; /// The module-level documentation comment.
+	FunctionDoc[] functions; /// Documented functions in this module.
+	TypeDoc[] types; /// Documented types (classes, structs, etc.) in this module.
 }
 
+/** Documentation for a D function or method. */
 struct FunctionDoc {
-	string name;
-	string fullyQualifiedName;
-	string moduleName;
-	string packageName;
-	string signature;
-	string returnType;
-	string[] parameters;
-	string docComment;
-	string[] examples;
-	bool isTemplate;
-	TemplateConstraint[] constraints;
-	PerformanceInfo performance;
+	string name; /// The unqualified function name.
+	string fullyQualifiedName; /// Full path including module (e.g. "std.algorithm.find").
+	string moduleName; /// The module containing this function.
+	string packageName; /// The package containing this function.
+	string signature; /// The full function signature string.
+	string returnType; /// The return type as a string.
+	string[] parameters; /// List of parameter names or declarations.
+	string docComment; /// The DDoc documentation comment.
+	string[] examples; /// Code examples extracted from documentation or unittests.
+	bool isTemplate; /// Whether this is a template function.
+	TemplateConstraint[] constraints; /// Template constraints, if any.
+	PerformanceInfo performance; /// Performance characteristics and attributes.
 }
 
+/** Documentation for a D type (class, struct, interface, or enum). */
 struct TypeDoc {
-	string name;
-	string fullyQualifiedName;
-	string moduleName;
-	string packageName;
-	string kind;
-	string docComment;
-	FunctionDoc[] methods;
-	string[] baseClasses;
-	string[] interfaces;
+	string name; /// The unqualified type name.
+	string fullyQualifiedName; /// Full path including module.
+	string moduleName; /// The module containing this type.
+	string packageName; /// The package containing this type.
+	string kind; /// The type kind: "class", "struct", "interface", or "enum".
+	string docComment; /// The DDoc documentation comment.
+	FunctionDoc[] methods; /// Documented methods belonging to this type.
+	string[] baseClasses; /// Base classes this type inherits from.
+	string[] interfaces; /// Interfaces this type implements.
 }
 
+/** A code example associated with a function, type, or package. */
 struct CodeExample {
-	string code;
-	string description;
-	string[] requiredImports;
-	bool isRunnable;
-	bool isUnittest;
-	long functionId;
-	long typeId;
-	long packageId;
+	string code; /// The example source code.
+	string description; /// A brief description of what the example demonstrates.
+	string[] requiredImports; /// Import statements needed to run this example.
+	bool isRunnable; /// Whether this example can be compiled and run standalone.
+	bool isUnittest; /// Whether this example was extracted from a unittest block.
+	long functionId; /// Database ID of the associated function, or 0 if none.
+	long typeId; /// Database ID of the associated type, or 0 if none.
+	long packageId; /// Database ID of the associated package, or 0 if none.
 }
 
+/** A template parameter constraint extracted from a template declaration. */
 struct TemplateConstraint {
-	string parameterName;
-	string constraintText;
-	string[] requiredTraits;
+	string parameterName; /// The template parameter this constraint applies to.
+	string constraintText; /// The textual representation of the constraint.
+	string[] requiredTraits; /// Traits required by this constraint (e.g. "isInputRange").
 }
 
+/** Performance characteristics and compile-time attributes of a function. */
 struct PerformanceInfo {
-	string timeComplexity;
-	string spaceComplexity;
-	bool allocatesMemory;
-	bool isNogc;
-	bool isNothrow;
-	bool isPure;
-	bool isSafe;
+	string timeComplexity; /// Big-O time complexity (e.g. "O(n log n)").
+	string spaceComplexity; /// Big-O space complexity.
+	bool allocatesMemory; /// Whether the function allocates GC or heap memory.
+	bool isNogc; /// Whether the function is marked `@nogc`.
+	bool isNothrow; /// Whether the function is marked `nothrow`.
+	bool isPure; /// Whether the function is marked `pure`.
+	bool isSafe; /// Whether the function is marked `@safe`.
 }
 
+/** A directed relationship between two functions (e.g. "calls", "overrides"). */
 struct FunctionRelationship {
-	long fromFunctionId;
-	long toFunctionId;
-	string relationshipType;
-	float weight;
+	long fromFunctionId; /// Database ID of the source function.
+	long toFunctionId; /// Database ID of the target function.
+	string relationshipType; /// The type of relationship (e.g. "calls", "similar_to").
+	float weight; /// Strength of the relationship, from 0.0 to 1.0.
 }
 
+/** A common usage pattern mined from code analysis. */
 struct UsagePattern {
-	string name;
-	string description;
-	string[] functionIds;
-	string codeTemplate;
-	string useCase;
+	string name; /// Short name for this pattern.
+	string description; /// Human-readable description of the pattern.
+	string[] functionIds; /// IDs of functions involved in this pattern.
+	string codeTemplate; /// A template showing how the pattern is typically used.
+	string useCase; /// The problem this pattern solves.
 }
 
+/** A single search result returned by the hybrid search engine. */
 struct SearchResult {
-	long id;
-	string name;
-	string fullyQualifiedName;
-	string signature;
-	string docComment;
-	string packageName;
-	string moduleName;
-	float rank;
+	long id; /// Database ID of the matched entity.
+	string name; /// The unqualified name of the matched entity.
+	string fullyQualifiedName; /// Full path including module and package.
+	string signature; /// Function signature or type declaration.
+	string docComment; /// The documentation comment of the matched entity.
+	string packageName; /// The package containing the matched entity.
+	string moduleName; /// The module containing the matched entity.
+	float rank; /// The relevance score, higher is better.
 }

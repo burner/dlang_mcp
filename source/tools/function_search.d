@@ -1,3 +1,9 @@
+/**
+ * MCP tool for searching D functions in the documentation database.
+ *
+ * Queries the hybrid search engine (FTS + vector) to find functions
+ * matching a query by name, signature, documentation, or functionality.
+ */
 module tools.function_search;
 
 import std.json : JSONValue, parseJSON, JSONType;
@@ -7,6 +13,12 @@ import mcp.types : ToolResult;
 import storage.crud;
 import storage.search;
 
+/**
+ * Tool that searches for D functions by name, signature, or documentation content.
+ *
+ * Returns matching functions with their signatures, documentation comments,
+ * module and package context, and relevance scores.
+ */
 class FunctionSearchTool : SearchTool {
 	@property string name()
 	{

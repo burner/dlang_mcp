@@ -1,10 +1,10 @@
+/** Data ingestion pipeline for crawling, parsing, and storing D package documentation. */
 module ingestion.pipeline;
 
 import storage.connection;
 import storage.crud;
 import ingestion.dub_crawler;
-import ingestion.ddoc_parser;
-import ingestion.enhanced_parser;
+import ingestion.ddoc_project_parser;
 import embeddings.manager;
 import models;
 import d2sqlite3;
@@ -17,33 +17,56 @@ import std.array;
 import std.datetime;
 import std.conv;
 
+/**
+ * Tracks the state and progress of a package ingestion operation.
+ *
+ * Used to support resumable batch ingestion by persisting the last
+ * successfully processed package and overall progress counters.
+ */
 struct IngestionProgress {
+	/** Name of the last package that was processed. */
 	string lastPackage;
+	/** Timestamp of the most recent progress update. */
 	SysTime lastUpdated;
+	/** Number of packages processed so far. */
 	long packagesProcessed;
+	/** Total number of packages scheduled for ingestion. */
 	long totalPackages;
+	/** Current status of the ingestion (e.g., "running", "completed", "error"). */
 	string status;
+	/** Error message if the ingestion encountered a failure, or empty. */
 	string errorMessage;
 }
 
+/**
+ * Orchestrates the end-to-end ingestion of D packages from the DUB registry.
+ *
+ * Coordinates crawling, parsing, storage, FTS indexing, and optional embedding
+ * generation for each ingested package.
+ */
 class IngestionPipeline {
 	private DBConnection conn;
 	private CRUDOperations crud;
 	private DubCrawler crawler;
-	private DdocParser parser;
-	private EnhancedDdocParser enhancedParser;
 	private EmbeddingManager embedder;
 
+	/**
+	 * Constructs the ingestion pipeline with all required subsystems.
+	 *
+	 * Params:
+	 *     dbPath = Filesystem path to the SQLite database file.
+	 */
 	this(string dbPath = "data/search.db")
 	{
 		conn = new DBConnection(dbPath);
 		crud = new CRUDOperations(conn);
 		crawler = new DubCrawler("data/cache");
-		parser = new DdocParser();
-		enhancedParser = new EnhancedDdocParser();
 		embedder = EmbeddingManager.getInstance();
 	}
 
+	/**
+	 * Closes the database connection and releases associated resources.
+	 */
 	void close()
 	{
 		if(conn !is null) {
@@ -52,6 +75,16 @@ class IngestionPipeline {
 		}
 	}
 
+	/**
+	 * Ingests a single package by name: fetches metadata, downloads source,
+	 * parses documentation, and stores everything in the database.
+	 *
+	 * Params:
+	 *     packageName = Name of the DUB package to ingest.
+	 *
+	 * Throws:
+	 *     Exception if fetching or parsing the package fails.
+	 */
 	void ingestPackage(string packageName)
 	{
 		writeln("\n=== Ingesting package: ", packageName, " ===");
@@ -77,12 +110,27 @@ class IngestionPipeline {
 			int typesCount = 0;
 			int examplesCount = 0;
 
-			foreach(file; dFiles) {
-				auto modResult = parseAndStoreModule(file, packageName, pkgId);
-				modulesCount += modResult.modules;
-				functionsCount += modResult.functions;
-				typesCount += modResult.types;
-				examplesCount += modResult.examples;
+			// Try structured DMD JSON parsing first for functions/types
+			auto parseResult = parseProject(srcDir);
+			if(parseResult.error.length == 0 && parseResult.modules.length > 0) {
+				foreach(ref mod; parseResult.modules) {
+					auto stored = storeModuleFromParsed(mod, packageName, pkgId);
+					modulesCount += stored.modules;
+					functionsCount += stored.functions;
+					typesCount += stored.types;
+					examplesCount += stored.examples;
+				}
+			} else {
+				// Fallback: store modules with unittest extraction only
+				if(parseResult.error.length > 0) {
+					stderr.writeln("  Note: DMD parse failed (", parseResult.error,
+							"), falling back to unittest-only extraction");
+				}
+				foreach(file; dFiles) {
+					auto modResult = storeModuleFromFile(file, packageName, pkgId);
+					modulesCount += modResult.modules;
+					examplesCount += modResult.examples;
+				}
 			}
 
 			writeln("  Indexed: ", modulesCount, " modules, ", functionsCount,
@@ -100,14 +148,15 @@ class IngestionPipeline {
 
 			transaction.commit();
 
-			writeln("  ✓ Package ingested successfully");
+			writeln("  Package ingested successfully");
 		} catch(Exception e) {
-			stderr.writeln("  ✗ Error: ", e.msg);
+			stderr.writeln("  Error: ", e.msg);
 			updateProgress(packageName, "error", e.msg);
 			throw e;
 		}
 	}
 
+	/** Counts of documentation items produced by processing a module. */
 	struct ParseResult {
 		int modules;
 		int functions;
@@ -115,12 +164,116 @@ class IngestionPipeline {
 		int examples;
 	}
 
-	private ParseResult parseAndStoreModule(string filePath, string packageName, long pkgId)
+	/**
+	 * Store a module parsed by the consolidated DMD JSON parser.
+	 *
+	 * Converts parser structs to model types, inserts functions/types into
+	 * the database, populates FTS indexes, and optionally stores embeddings.
+	 */
+	private ParseResult storeModuleFromParsed(ref ParsedModule mod, string packageName, long pkgId)
 	{
 		ParseResult result;
 
 		try {
-			auto unittests = enhancedParser.extractUnittestBlocks(filePath, packageName);
+			auto modDoc = toModuleDoc(mod, packageName);
+			long modId = crud.insertModule(pkgId, modDoc);
+			result.modules = 1;
+
+			// Store functions
+			foreach(ref func; mod.functions) {
+				auto funcDoc = toFunctionDoc(func, mod.name, packageName);
+				long funcId = crud.insertFunction(modId, funcDoc);
+				result.functions++;
+
+				crud.updateFtsFunction(funcId, pkgId, funcDoc.name,
+						funcDoc.fullyQualifiedName, funcDoc.signature,
+						funcDoc.docComment, funcDoc.parameters,
+						funcDoc.examples, packageName);
+
+				if(conn.hasVectorSupport() && funcId > 0) {
+					string funcText = funcDoc.name ~ " " ~ funcDoc.signature
+						~ " " ~ funcDoc.docComment;
+					auto funcEmbedding = embedder.embed(funcText);
+					crud.storeFunctionEmbedding(funcId, funcEmbedding);
+				}
+			}
+
+			// Store types and their methods
+			foreach(ref type; mod.types) {
+				auto typeDoc = toTypeDoc(type, mod.name, packageName);
+				long typeId = crud.insertType(modId, typeDoc);
+				result.types++;
+
+				crud.updateFtsType(typeId, pkgId, typeDoc.name,
+						typeDoc.fullyQualifiedName, typeDoc.kind,
+						typeDoc.docComment, packageName);
+
+				if(conn.hasVectorSupport() && typeId > 0) {
+					string typeText = typeDoc.name ~ " " ~ typeDoc.kind
+						~ " " ~ typeDoc.docComment;
+					auto typeEmbedding = embedder.embed(typeText);
+					crud.storeTypeEmbedding(typeId, typeEmbedding);
+				}
+
+				// Store methods as functions under the module
+				foreach(ref method; type.methods) {
+					auto methFqn = mod.name ~ "." ~ type.name;
+					auto methDoc = toFunctionDoc(method, methFqn, packageName);
+					long methId = crud.insertFunction(modId, methDoc);
+					result.functions++;
+
+					crud.updateFtsFunction(methId, pkgId, methDoc.name,
+							methDoc.fullyQualifiedName, methDoc.signature,
+							methDoc.docComment, methDoc.parameters,
+							methDoc.examples, packageName);
+
+					if(conn.hasVectorSupport() && methId > 0) {
+						string methText = methDoc.name ~ " " ~ methDoc.signature
+							~ " " ~ methDoc.docComment;
+						auto methEmbedding = embedder.embed(methText);
+						crud.storeFunctionEmbedding(methId, methEmbedding);
+					}
+				}
+			}
+
+			// Extract unittests as code examples from source file (if available)
+			if(mod.name.length > 0) {
+				// Try to find source file from the first function/type with a file path
+				string sourceFile = findSourceFileForModule(mod);
+				if(sourceFile.length > 0) {
+					auto unittests = extractUnittestBlocks(sourceFile, packageName);
+					foreach(ref ex; unittests) {
+						ex.packageId = pkgId;
+						long exampleId = crud.insertCodeExample(ex);
+						result.examples++;
+
+						crud.updateFtsExample(exampleId, ex.code, ex.description, "", packageName);
+
+						if(conn.hasVectorSupport() && exampleId > 0) {
+							string exText = ex.code ~ " " ~ ex.description;
+							auto exEmbedding = embedder.embed(exText);
+							crud.storeExampleEmbedding(exampleId, exEmbedding);
+						}
+					}
+				}
+			}
+		} catch(Exception e) {
+			stderr.writeln("    Warning: Failed to store module ", mod.name, ": ", e.msg);
+		}
+
+		return result;
+	}
+
+	/**
+	 * Fallback: store a module from a source file using only unittest extraction.
+	 * Used when DMD JSON parsing fails or is unavailable.
+	 */
+	private ParseResult storeModuleFromFile(string filePath, string packageName, long pkgId)
+	{
+		ParseResult result;
+
+		try {
+			auto unittests = extractUnittestBlocks(filePath, packageName);
 
 			string moduleName;
 			auto parts = filePath.split("/");
@@ -135,27 +288,41 @@ class IngestionPipeline {
 			], []));
 			result.modules = 1;
 
-			foreach(ex; unittests) {
+			foreach(ref ex; unittests) {
 				ex.packageId = pkgId;
 				long exampleId = crud.insertCodeExample(ex);
 				result.examples++;
+
+				crud.updateFtsExample(exampleId, ex.code, ex.description, "", packageName);
 
 				if(conn.hasVectorSupport() && exampleId > 0) {
 					string exText = ex.code ~ " " ~ ex.description;
 					auto exEmbedding = embedder.embed(exText);
 					crud.storeExampleEmbedding(exampleId, exEmbedding);
 				}
-
-				crud.updateFtsExample(exampleId, ex.code, ex.description, "", packageName);
 			}
-
-			result.functions = 0;
-			result.types = 0;
 		} catch(Exception e) {
 			stderr.writeln("    Warning: Failed to parse ", filePath, ": ", e.msg);
 		}
 
 		return result;
+	}
+
+	/**
+	 * Try to find the source file path for a parsed module by examining
+	 * its functions and types for file metadata.
+	 */
+	private static string findSourceFileForModule(ref ParsedModule mod)
+	{
+		foreach(ref f; mod.functions) {
+			if(f.file.length > 0 && exists(f.file))
+				return f.file;
+		}
+		foreach(ref t; mod.types) {
+			if(t.file.length > 0 && exists(t.file))
+				return t.file;
+		}
+		return "";
 	}
 
 	private void updateFtsForPackage(long pkgId, PackageMetadata metadata)
@@ -172,6 +339,17 @@ class IngestionPipeline {
 		stmt.execute();
 	}
 
+	/**
+	 * Ingests all packages from the DUB registry in batch mode.
+	 *
+	 * Supports resuming a previously interrupted run and optionally limits the
+	 * number of packages processed.
+	 *
+	 * Params:
+	 *     limit = Maximum number of packages to process; 0 means no limit.
+	 *     fresh = If `true`, ignores any previous progress and starts from
+	 *             the beginning.
+	 */
 	void ingestAll(int limit = 0, bool fresh = false)
 	{
 		writeln("\n=== Starting Batch Ingestion ===");
@@ -242,6 +420,13 @@ class IngestionPipeline {
 		writeln("  Examples: ", finalStats.exampleCount);
 	}
 
+	/**
+	 * Retrieves the most recent ingestion progress record from the database.
+	 *
+	 * Returns:
+	 *     An `IngestionProgress` struct with the current state; fields default
+	 *     to empty/zero if no progress record exists.
+	 */
 	IngestionProgress getProgress()
 	{
 		IngestionProgress progress;
@@ -259,7 +444,8 @@ class IngestionPipeline {
 				if(row["error_message"].type != SqliteType.NULL)
 					progress.errorMessage = row["error_message"].as!string;
 			}
-		} catch(Exception) {
+		} catch(Exception e) {
+			stderr.writeln("Warning: Failed to read ingestion progress: ", e.msg);
 		}
 
 		return progress;

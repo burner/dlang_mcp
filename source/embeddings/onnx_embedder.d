@@ -1,3 +1,6 @@
+/**
+ * ONNX Runtime embedding backend for neural text embedding models.
+ */
 module embeddings.onnx_embedder;
 
 import embeddings.embedder;
@@ -58,6 +61,12 @@ version(Windows) {
 	}
 }
 
+/**
+ * Generates dense vector embeddings using an ONNX transformer model via the ONNX Runtime C API.
+ *
+ * If the ONNX model or runtime is unavailable, the embedder transparently
+ * falls back to a TF-IDF backend so callers always receive valid vectors.
+ */
 class OnnxEmbedder : Embedder {
 	private string modelPath;
 	private string vocabPath;
@@ -80,6 +89,12 @@ class OnnxEmbedder : Embedder {
 	private int padTokenId = 0;
 	private int unkTokenId = 100;
 
+	/**
+	 * Construct an ONNX embedder, loading the model from the given directory.
+	 *
+	 * Params:
+	 *     modelDir = Directory containing `model.onnx` and `vocab.txt` (or `tokenizer.json`).
+	 */
 	this(string modelDir = "data/models")
 	{
 		this.modelPath = buildPath(modelDir, "model.onnx");
@@ -100,6 +115,7 @@ class OnnxEmbedder : Embedder {
 		}
 	}
 
+	/** Release the ONNX Runtime session and associated resources. */
 	~this()
 	{
 		releaseSession();
@@ -250,6 +266,16 @@ class OnnxEmbedder : Embedder {
 		}
 	}
 
+	/**
+	 * Embed a single text string using the ONNX model.
+	 *
+	 * Falls back to TF-IDF if the ONNX session is not available.
+	 *
+	 * Params:
+	 *     text = The input text to embed.
+	 *
+	 * Returns: A normalized float array representing the embedding vector.
+	 */
 	float[] embed(string text)
 	{
 		if(!_available || session is null) {
@@ -398,6 +424,16 @@ class OnnxEmbedder : Embedder {
 		return embedding;
 	}
 
+	/**
+	 * Embed multiple text strings in one call.
+	 *
+	 * Falls back to TF-IDF if the ONNX session is not available.
+	 *
+	 * Params:
+	 *     texts = An array of input texts to embed.
+	 *
+	 * Returns: An array of float arrays, one embedding per input text.
+	 */
 	float[][] embedBatch(string[] texts)
 	{
 		if(!_available || session is null) {
@@ -411,16 +447,25 @@ class OnnxEmbedder : Embedder {
 		return results;
 	}
 
+	/**
+	 * Returns: The dimensionality of the embedding vectors (typically 384).
+	 */
 	int dimensions()
 	{
 		return _dimensions;
 	}
 
+	/**
+	 * Returns: `true` if the ONNX model was loaded successfully and is ready for inference.
+	 */
 	bool isAvailable()
 	{
 		return _available;
 	}
 
+	/**
+	 * Returns: `"ONNX"` when the model is available, or `"TF-IDF (fallback)"` otherwise.
+	 */
 	string name()
 	{
 		return _available ? "ONNX" : "TF-IDF (fallback)";

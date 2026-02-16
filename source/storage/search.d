@@ -1,3 +1,10 @@
+/**
+ * Hybrid search engine combining FTS5 full-text and sqlite-vec vector similarity.
+ *
+ * Provides ranked search across packages, functions, types, and code examples
+ * using configurable weighting between BM25 text scores and cosine-distance
+ * vector scores. Falls back to FTS-only when sqlite-vec is unavailable.
+ */
 module storage.search;
 
 import storage.connection;
@@ -10,30 +17,46 @@ import std.array;
 import std.conv;
 import std.math;
 import std.string;
+import utils.logging;
 
+/** Configuration for a search query. */
 struct SearchOptions {
-	string query;
-	string packageName;
-	string kind;
-	int limit = 20;
-	bool useVectors = true;
-	float ftsWeight = 0.3f;
-	float vectorWeight = 0.7f;
+	string query; /** The search terms. */
+	string packageName; /** Optional filter to restrict results to a specific package. */
+	string kind; /** Optional entity kind filter: "function", "type", "package", or "example". */
+	int limit = 20; /** Maximum number of results to return. */
+	bool useVectors = true; /** Whether to include vector similarity scores when available. */
+	float ftsWeight = 0.3f; /** Weight applied to the FTS BM25 score in combined ranking. */
+	float vectorWeight = 0.7f; /** Weight applied to the vector cosine similarity score. */
 }
 
+/** Intermediate scoring container used during result merging. */
 struct ScoredResult {
-	long id;
-	float ftsScore;
-	float vectorScore;
-	float combinedScore;
+	long id; /** The entity row ID. */
+	float ftsScore; /** BM25 full-text relevance score. */
+	float vectorScore; /** Cosine similarity score from vector search. */
+	float combinedScore; /** Weighted combination of FTS and vector scores. */
 }
 
+/**
+ * Hybrid search engine that merges FTS5 and vector similarity results.
+ *
+ * Queries are executed against both the FTS5 indexes (for keyword relevance)
+ * and the sqlite-vec vector tables (for semantic similarity). Results are
+ * merged and ranked using a weighted combination of both scores.
+ */
 class HybridSearch {
 	private DBConnection conn;
 	private CRUDOperations crud;
 	private EmbeddingManager embedder;
 	private bool hasVectorSupport;
 
+	/**
+	 * Constructs the hybrid search engine.
+	 *
+	 * Params:
+	 *     conn = The database connection. Vector support is auto-detected.
+	 */
 	this(DBConnection conn)
 	{
 		this.conn = conn;
@@ -42,6 +65,16 @@ class HybridSearch {
 		this.hasVectorSupport = conn.hasVectorSupport() && embedder.hasVectorSupport();
 	}
 
+	/**
+	 * Searches for functions matching the query.
+	 *
+	 * Params:
+	 *     query = The search terms.
+	 *     limit = Maximum number of results.
+	 *     packageFilter = Optional package name to restrict results.
+	 *
+	 * Returns: Ranked search results.
+	 */
 	SearchResult[] searchFunctions(string query, int limit = 20, string packageFilter = null)
 	{
 		SearchOptions opts;
@@ -52,6 +85,17 @@ class HybridSearch {
 		return search(opts);
 	}
 
+	/**
+	 * Searches for types matching the query.
+	 *
+	 * Params:
+	 *     query = The search terms.
+	 *     limit = Maximum number of results.
+	 *     kindFilter = Optional type kind filter (class, struct, enum, interface).
+	 *     packageFilter = Optional package name to restrict results.
+	 *
+	 * Returns: Ranked search results.
+	 */
 	SearchResult[] searchTypes(string query, int limit = 20,
 			string kindFilter = null, string packageFilter = null)
 	{
@@ -63,6 +107,15 @@ class HybridSearch {
 		return search(opts);
 	}
 
+	/**
+	 * Searches for packages matching the query.
+	 *
+	 * Params:
+	 *     query = The search terms.
+	 *     limit = Maximum number of results.
+	 *
+	 * Returns: Ranked search results.
+	 */
 	SearchResult[] searchPackages(string query, int limit = 20)
 	{
 		SearchOptions opts;
@@ -72,6 +125,16 @@ class HybridSearch {
 		return search(opts);
 	}
 
+	/**
+	 * Searches for code examples matching the query.
+	 *
+	 * Params:
+	 *     query = The search terms.
+	 *     limit = Maximum number of results.
+	 *     packageFilter = Optional package name to restrict results.
+	 *
+	 * Returns: Ranked search results.
+	 */
 	SearchResult[] searchExamples(string query, int limit = 20, string packageFilter = null)
 	{
 		SearchOptions opts;
@@ -82,6 +145,15 @@ class HybridSearch {
 		return search(opts);
 	}
 
+	/**
+	 * Executes a search with full options, dispatching to the appropriate
+	 * entity-specific search methods based on the `kind` filter.
+	 *
+	 * Params:
+	 *     opts = The search configuration including query, filters, and weights.
+	 *
+	 * Returns: Combined and ranked search results across all matching entity types.
+	 */
 	SearchResult[] search(SearchOptions opts)
 	{
 		if(opts.query.empty) {
@@ -115,200 +187,52 @@ class HybridSearch {
 		return results;
 	}
 
+	/** Combine FTS and vector scores into a single rank using configured weights. */
+	private static float combineScores(float ftsScore, float vecScore, float ftsWeight, float vecWeight)
+	{
+		float fts = ftsScore > 0 ? ftsScore : 0.0f;
+		float vec = vecScore > 0 ? vecScore : 0.0f;
+
+		if(fts > 0 && vec > 0)
+			return fts * ftsWeight + vec * vecWeight;
+		else if(fts > 0)
+			return fts;
+		else if(vec > 0)
+			return vec;
+		else
+			return 0.0f;
+	}
+
+	/** Merge vector search results into existing combined results map. */
+	private static void mergeVectorResults(ref ScoredResult[long] combinedResults, ScoredResult[] vecResults)
+	{
+		foreach(vr; vecResults) {
+			if(vr.id <= 0)
+				continue;
+
+			if(vr.id in combinedResults) {
+				combinedResults[vr.id].vectorScore = vr.vectorScore;
+			} else {
+				ScoredResult sr;
+				sr.id = vr.id;
+				sr.vectorScore = vr.vectorScore;
+				combinedResults[vr.id] = sr;
+			}
+		}
+	}
+
 	private SearchResult[] searchPackagesInternal(SearchOptions opts)
 	{
 		ScoredResult[long] combinedResults;
 
-		auto ftsResults = searchFts("fts_packages", opts.query, opts.limit * 2);
-		foreach(ftsr; ftsResults) {
-			if(ftsr.id <= 0)
-				continue;
-
-			ScoredResult sr;
-			sr.id = ftsr.id;
-			sr.ftsScore = ftsr.ftsScore;
-			combinedResults[ftsr.id] = sr;
-		}
-
-		if(hasVectorSupport && opts.useVectors) {
-			auto vecResults = searchVectorWithIds("vec_packages", opts.query, opts.limit * 2);
-			foreach(vr; vecResults) {
-				if(vr.id <= 0)
-					continue;
-
-				if(vr.id in combinedResults) {
-					combinedResults[vr.id].vectorScore = vr.vectorScore;
-				} else {
-					ScoredResult sr;
-					sr.id = vr.id;
-					sr.vectorScore = vr.vectorScore;
-					combinedResults[vr.id] = sr;
-				}
-			}
-		}
-
-		SearchResult[] results;
-		foreach(id, sr; combinedResults) {
-			SearchResult r;
-			r.id = sr.id;
-			r.name = getPackageName(sr.id);
-			r.fullyQualifiedName = r.name;
-
-			float fts = sr.ftsScore > 0 ? sr.ftsScore : 0.0f;
-			float vec = sr.vectorScore > 0 ? sr.vectorScore : 0.0f;
-
-			if(fts > 0 && vec > 0)
-				r.rank = fts * opts.ftsWeight + vec * opts.vectorWeight;
-			else if(fts > 0)
-				r.rank = fts;
-			else if(vec > 0)
-				r.rank = vec;
-			else
-				r.rank = 0.0f;
-
-			results ~= r;
-		}
-
-		sort!"a.rank > b.rank"(results);
-		if(results.length > opts.limit)
-			results = results[0 .. opts.limit];
-
-		return results;
-	}
-
-	private SearchResult[] searchFunctionsInternal(SearchOptions opts)
-	{
-		string sql = "
-            SELECT f.id, f.name, f.fully_qualified_name, f.signature, f.doc_comment,
-                   m.full_path as module_name, p.name as package_name
-            FROM functions f
-            JOIN modules m ON m.id = f.module_id
-            JOIN packages p ON p.id = m.package_id
-            WHERE f.id IN (
-                SELECT rowid FROM fts_functions WHERE fts_functions MATCH ?
-                ORDER BY bm25(fts_functions) DESC LIMIT ?
-            )
-        ";
-
-		if(!opts.packageName.empty) {
-			sql = "
-                SELECT f.id, f.name, f.fully_qualified_name, f.signature, f.doc_comment,
-                       m.full_path as module_name, p.name as package_name
-                FROM functions f
-                JOIN modules m ON m.id = f.module_id
-                JOIN packages p ON p.id = m.package_id
-                WHERE p.name = ? AND f.id IN (
-                    SELECT rowid FROM fts_functions WHERE fts_functions MATCH ?
-                    ORDER BY bm25(fts_functions) DESC LIMIT ?
-                )
-            ";
-		}
-
-		SearchResult[] results;
-
-		try {
-			auto stmt = conn.prepare(sql);
-			int paramIdx = 1;
-
-			if(!opts.packageName.empty) {
-				stmt.bind(paramIdx++, opts.packageName);
-			}
-
-			stmt.bind(paramIdx++, opts.query);
-			stmt.bind(paramIdx++, opts.limit * 2);
-
-			auto queryEmbedding = embedder.embed(opts.query);
-
-			foreach(row; stmt.execute()) {
-				SearchResult sr;
-				sr.id = row["id"].as!long;
-				sr.name = row["name"].as!string;
-				sr.fullyQualifiedName = row["fully_qualified_name"].as!string;
-				sr.signature = row["signature"].as!string;
-				sr.docComment = row["doc_comment"].as!string;
-				sr.moduleName = row["module_name"].as!string;
-				sr.packageName = row["package_name"].as!string;
-
-				sr.rank = 0.5f;
-
-				results ~= sr;
-			}
-		} catch(Exception e) {
-		}
-
-		return results;
-	}
-
-	private SearchResult[] searchTypesInternal(SearchOptions opts)
-	{
-		string sql = "
-            SELECT t.id, t.name, t.fully_qualified_name, t.kind, t.doc_comment,
-                   m.full_path as module_name, p.name as package_name
-            FROM types t
-            JOIN modules m ON m.id = t.module_id
-            JOIN packages p ON p.id = m.package_id
-            WHERE t.id IN (
-                SELECT rowid FROM fts_types WHERE fts_types MATCH ?
-                ORDER BY bm25(fts_types) DESC LIMIT ?
-            )
-        ";
-
-		if(!opts.kind.empty && opts.kind != "type") {
-			sql = "
-                SELECT t.id, t.name, t.fully_qualified_name, t.kind, t.doc_comment,
-                       m.full_path as module_name, p.name as package_name
-                FROM types t
-                JOIN modules m ON m.id = t.module_id
-                JOIN packages p ON p.id = m.package_id
-                WHERE t.kind = ? AND t.id IN (
-                    SELECT rowid FROM fts_types WHERE fts_types MATCH ?
-                    ORDER BY bm25(fts_types) DESC LIMIT ?
-                )
-            ";
-		}
-
-		SearchResult[] results;
-
-		try {
-			auto stmt = conn.prepare(sql);
-			int paramIdx = 1;
-
-			if(!opts.kind.empty && opts.kind != "type") {
-				stmt.bind(paramIdx++, opts.kind);
-			}
-
-			stmt.bind(paramIdx++, opts.query);
-			stmt.bind(paramIdx++, opts.limit * 2);
-
-			foreach(row; stmt.execute()) {
-				SearchResult sr;
-				sr.id = row["id"].as!long;
-				sr.name = row["name"].as!string;
-				sr.fullyQualifiedName = row["fully_qualified_name"].as!string;
-				sr.docComment = row["doc_comment"].as!string;
-				sr.moduleName = row["module_name"].as!string;
-				sr.packageName = row["package_name"].as!string;
-
-				sr.rank = 0.5f;
-
-				results ~= sr;
-			}
-		} catch(Exception e) {
-		}
-
-		return results;
-	}
-
-	private SearchResult[] searchExamplesInternal(SearchOptions opts)
-	{
-		ScoredResult[long] combinedResults;
-
+		// FTS search with proper JOIN to resolve package_id
 		try {
 			auto ftsStmt = conn.prepare("
-                SELECT rowid as id, bm25(fts_examples) as score 
-                FROM fts_examples 
-                WHERE fts_examples MATCH ? 
-                ORDER BY score 
+                SELECT p.id, fts.rank as score
+                FROM fts_packages fts
+                JOIN packages p ON p.id = fts.package_id
+                WHERE fts_packages MATCH ?
+                ORDER BY fts.rank
                 LIMIT ?
             ");
 			ftsStmt.bind(1, opts.query);
@@ -325,38 +249,338 @@ class HybridSearch {
 				combinedResults[id] = sr;
 			}
 		} catch(Exception e) {
+			logError("searchPackagesInternal FTS failed: " ~ e.msg);
 		}
 
 		if(hasVectorSupport && opts.useVectors) {
-			auto vecResults = searchVectorWithIds("vec_examples", opts.query, opts.limit * 2);
-			foreach(vr; vecResults) {
-				if(vr.id <= 0)
-					continue;
-
-				if(vr.id in combinedResults) {
-					combinedResults[vr.id].vectorScore = vr.vectorScore;
-				} else {
-					ScoredResult sr;
-					sr.id = vr.id;
-					sr.vectorScore = vr.vectorScore;
-					combinedResults[vr.id] = sr;
-				}
-			}
+			auto vecResults = searchVectorWithIds("vec_packages", opts.query, opts.limit * 2);
+			mergeVectorResults(combinedResults, vecResults);
 		}
 
 		SearchResult[] results;
 		foreach(id, sr; combinedResults) {
-			float fts = sr.ftsScore > 0 ? sr.ftsScore : 0.0f;
-			float vec = sr.vectorScore > 0 ? sr.vectorScore : 0.0f;
+			SearchResult r;
+			r.id = sr.id;
+			r.name = getPackageName(sr.id);
+			r.fullyQualifiedName = r.name;
+			r.rank = combineScores(sr.ftsScore, sr.vectorScore, opts.ftsWeight, opts.vectorWeight);
 
-			float rank;
-			if(fts > 0 && vec > 0)
-				rank = fts * opts.ftsWeight + vec * opts.vectorWeight;
-			else if(fts > 0)
-				rank = fts;
-			else if(vec > 0)
-				rank = vec;
-			else
+			results ~= r;
+		}
+
+		sort!"a.rank > b.rank"(results);
+		if(results.length > opts.limit)
+			results = results[0 .. opts.limit];
+
+		return results;
+	}
+
+	private SearchResult[] searchFunctionsInternal(SearchOptions opts)
+	{
+		ScoredResult[long] combinedResults;
+
+		// FTS search
+		try {
+			string sql = "
+                SELECT f.id, f.name, f.fully_qualified_name, f.signature, f.doc_comment,
+                       m.full_path as module_name, p.name as package_name,
+                       fts.rank as score
+                FROM fts_functions fts
+                JOIN functions f ON f.id = fts.function_id
+                JOIN modules m ON m.id = f.module_id
+                JOIN packages p ON p.id = m.package_id
+                WHERE fts_functions MATCH ?
+                ORDER BY fts.rank
+                LIMIT ?
+            ";
+
+			if(!opts.packageName.empty) {
+				sql = "
+                    SELECT f.id, f.name, f.fully_qualified_name, f.signature, f.doc_comment,
+                           m.full_path as module_name, p.name as package_name,
+                           fts.rank as score
+                    FROM fts_functions fts
+                    JOIN functions f ON f.id = fts.function_id
+                    JOIN modules m ON m.id = f.module_id
+                    JOIN packages p ON p.id = m.package_id
+                    WHERE p.name = ? AND fts_functions MATCH ?
+                    ORDER BY fts.rank
+                    LIMIT ?
+                ";
+			}
+
+			auto stmt = conn.prepare(sql);
+			int paramIdx = 1;
+
+			if(!opts.packageName.empty) {
+				stmt.bind(paramIdx++, opts.packageName);
+			}
+
+			stmt.bind(paramIdx++, opts.query);
+			stmt.bind(paramIdx++, opts.limit * 2);
+
+			foreach(row; stmt.execute()) {
+				long id = row["id"].as!long;
+				if(id <= 0)
+					continue;
+
+				ScoredResult sr;
+				sr.id = id;
+				sr.ftsScore = -row["score"].as!float;
+				combinedResults[id] = sr;
+			}
+		} catch(Exception e) {
+			logError("searchFunctionsInternal FTS failed: " ~ e.msg);
+		}
+
+		// Vector search
+		if(hasVectorSupport && opts.useVectors) {
+			auto vecResults = searchVectorWithIds("vec_functions", opts.query, opts.limit * 2);
+			mergeVectorResults(combinedResults, vecResults);
+		}
+
+		// Build final results
+		SearchResult[] results;
+		foreach(id, sr; combinedResults) {
+			float rank = combineScores(sr.ftsScore, sr.vectorScore, opts.ftsWeight, opts.vectorWeight);
+
+			if(rank <= 0.0f)
+				continue;
+
+			SearchResult r;
+			r.id = id;
+			r.rank = rank;
+			results ~= r;
+		}
+
+		sort!"a.rank > b.rank"(results);
+		if(results.length > opts.limit)
+			results = results[0 .. opts.limit];
+
+		if(results.length == 0)
+			return results;
+
+		// Fetch full details for ranked results
+		long[] ids;
+		foreach(r; results)
+			ids ~= r.id;
+
+		string detailSql = format("
+            SELECT f.id, f.name, f.fully_qualified_name, f.signature, f.doc_comment,
+                   m.full_path as module_name, p.name as package_name
+            FROM functions f
+            JOIN modules m ON m.id = f.module_id
+            JOIN packages p ON p.id = m.package_id
+            WHERE f.id IN (%s)
+        ", ids.map!(n => n.text).join(","));
+
+		try {
+			auto stmt = conn.prepare(detailSql);
+			foreach(row; stmt.execute()) {
+				long id = row["id"].as!long;
+				foreach(ref r; results) {
+					if(r.id == id) {
+						r.name = row["name"].as!string;
+						r.fullyQualifiedName = row["fully_qualified_name"].as!string;
+						if(row["signature"].type != SqliteType.NULL)
+							r.signature = row["signature"].as!string;
+						if(row["doc_comment"].type != SqliteType.NULL)
+							r.docComment = row["doc_comment"].as!string;
+						r.moduleName = row["module_name"].as!string;
+						r.packageName = row["package_name"].as!string;
+						break;
+					}
+				}
+			}
+		} catch(Exception e) {
+			logError("searchFunctionsInternal detail fetch failed: " ~ e.msg);
+		}
+
+		return results;
+	}
+
+	private SearchResult[] searchTypesInternal(SearchOptions opts)
+	{
+		ScoredResult[long] combinedResults;
+
+		// FTS search
+		try {
+			string sql = "
+                SELECT t.id, t.name, t.fully_qualified_name, t.kind, t.doc_comment,
+                       m.full_path as module_name, p.name as package_name,
+                       fts.rank as score
+                FROM fts_types fts
+                JOIN types t ON t.id = fts.type_id
+                JOIN modules m ON m.id = t.module_id
+                JOIN packages p ON p.id = m.package_id
+                WHERE fts_types MATCH ?
+                ORDER BY fts.rank
+                LIMIT ?
+            ";
+
+			if(!opts.kind.empty && opts.kind != "type") {
+				sql = "
+                    SELECT t.id, t.name, t.fully_qualified_name, t.kind, t.doc_comment,
+                           m.full_path as module_name, p.name as package_name,
+                           fts.rank as score
+                    FROM fts_types fts
+                    JOIN types t ON t.id = fts.type_id
+                    JOIN modules m ON m.id = t.module_id
+                    JOIN packages p ON p.id = m.package_id
+                    WHERE t.kind = ? AND fts_types MATCH ?
+                    ORDER BY fts.rank
+                    LIMIT ?
+                ";
+			}
+
+			auto stmt = conn.prepare(sql);
+			int paramIdx = 1;
+
+			if(!opts.kind.empty && opts.kind != "type") {
+				stmt.bind(paramIdx++, opts.kind);
+			}
+
+			stmt.bind(paramIdx++, opts.query);
+			stmt.bind(paramIdx++, opts.limit * 2);
+
+			foreach(row; stmt.execute()) {
+				long id = row["id"].as!long;
+				if(id <= 0)
+					continue;
+
+				ScoredResult sr;
+				sr.id = id;
+				sr.ftsScore = -row["score"].as!float;
+				combinedResults[id] = sr;
+			}
+		} catch(Exception e) {
+			logError("searchTypesInternal FTS failed: " ~ e.msg);
+		}
+
+		// Vector search
+		if(hasVectorSupport && opts.useVectors) {
+			auto vecResults = searchVectorWithIds("vec_types", opts.query, opts.limit * 2);
+			mergeVectorResults(combinedResults, vecResults);
+		}
+
+		// Build final results
+		SearchResult[] results;
+		foreach(id, sr; combinedResults) {
+			float rank = combineScores(sr.ftsScore, sr.vectorScore, opts.ftsWeight, opts.vectorWeight);
+
+			if(rank <= 0.0f)
+				continue;
+
+			SearchResult r;
+			r.id = id;
+			r.rank = rank;
+			results ~= r;
+		}
+
+		sort!"a.rank > b.rank"(results);
+		if(results.length > opts.limit)
+			results = results[0 .. opts.limit];
+
+		if(results.length == 0)
+			return results;
+
+		// Fetch full details for ranked results
+		long[] ids;
+		foreach(r; results)
+			ids ~= r.id;
+
+		string detailSql = format("
+            SELECT t.id, t.name, t.fully_qualified_name, t.kind, t.doc_comment,
+                   m.full_path as module_name, p.name as package_name
+            FROM types t
+            JOIN modules m ON m.id = t.module_id
+            JOIN packages p ON p.id = m.package_id
+            WHERE t.id IN (%s)
+        ", ids.map!(n => n.text).join(","));
+
+		try {
+			auto stmt = conn.prepare(detailSql);
+			foreach(row; stmt.execute()) {
+				long id = row["id"].as!long;
+				foreach(ref r; results) {
+					if(r.id == id) {
+						r.name = row["name"].as!string;
+						r.fullyQualifiedName = row["fully_qualified_name"].as!string;
+						if(row["doc_comment"].type != SqliteType.NULL)
+							r.docComment = row["doc_comment"].as!string;
+						r.moduleName = row["module_name"].as!string;
+						r.packageName = row["package_name"].as!string;
+						break;
+					}
+				}
+			}
+		} catch(Exception e) {
+			logError("searchTypesInternal detail fetch failed: " ~ e.msg);
+		}
+
+		return results;
+	}
+
+	private SearchResult[] searchExamplesInternal(SearchOptions opts)
+	{
+		ScoredResult[long] combinedResults;
+
+		try {
+			string sql = "
+                SELECT e.id, fts.rank as score
+                FROM fts_examples fts
+                JOIN code_examples e ON e.id = fts.example_id
+                WHERE fts_examples MATCH ?
+                ORDER BY fts.rank
+                LIMIT ?
+            ";
+
+			if(!opts.packageName.empty) {
+				sql = "
+                    SELECT e.id, fts.rank as score
+                    FROM fts_examples fts
+                    JOIN code_examples e ON e.id = fts.example_id
+                    LEFT JOIN packages p ON p.id = e.package_id
+                    WHERE p.name = ? AND fts_examples MATCH ?
+                    ORDER BY fts.rank
+                    LIMIT ?
+                ";
+			}
+
+			auto ftsStmt = conn.prepare(sql);
+			int paramIdx = 1;
+
+			if(!opts.packageName.empty) {
+				ftsStmt.bind(paramIdx++, opts.packageName);
+			}
+
+			ftsStmt.bind(paramIdx++, opts.query);
+			ftsStmt.bind(paramIdx++, opts.limit * 2);
+
+			foreach(row; ftsStmt.execute()) {
+				long id = row["id"].as!long;
+				if(id <= 0)
+					continue;
+
+				ScoredResult sr;
+				sr.id = id;
+				sr.ftsScore = -row["score"].as!float;
+				combinedResults[id] = sr;
+			}
+		} catch(Exception e) {
+			logError("searchExamplesInternal FTS failed: " ~ e.msg);
+		}
+
+		if(hasVectorSupport && opts.useVectors) {
+			auto vecResults = searchVectorWithIds("vec_examples", opts.query, opts.limit * 2);
+			mergeVectorResults(combinedResults, vecResults);
+		}
+
+		SearchResult[] results;
+		foreach(id, sr; combinedResults) {
+			float rank = combineScores(sr.ftsScore, sr.vectorScore, opts.ftsWeight, opts.vectorWeight);
+
+			if(rank <= 0.0f)
 				continue;
 
 			SearchResult r;
@@ -403,37 +627,22 @@ class HybridSearch {
 				}
 			}
 		} catch(Exception e) {
+			logError("searchExamplesInternal detail fetch failed: " ~ e.msg);
 		}
 
 		return results;
 	}
 
-	private ScoredResult[] searchFts(string table, string query, int limit)
-	{
-		ScoredResult[] results;
-
-		try {
-			string sql = format(
-					"SELECT rowid as id, bm25(%s) as score FROM %s WHERE %s MATCH ? ORDER BY score LIMIT ?",
-					table, table, table);
-
-			auto stmt = conn.prepare(sql);
-			stmt.bind(1, query);
-			stmt.bind(2, limit);
-
-			foreach(row; stmt.execute()) {
-				ScoredResult sr;
-				sr.id = row["id"].as!long;
-				sr.ftsScore = -row["score"].as!float;
-				sr.combinedScore = sr.ftsScore;
-				results ~= sr;
-			}
-		} catch(Exception e) {
-		}
-
-		return results;
-	}
-
+	/**
+	 * Performs a vector similarity search and returns scored results.
+	 *
+	 * Params:
+	 *     table = The vector table name (e.g. "vec_functions").
+	 *     query = The search text to embed and compare against.
+	 *     limit = Maximum number of nearest neighbours to return.
+	 *
+	 * Returns: An array of `ScoredResult` with vector similarity scores.
+	 */
 	ScoredResult[] searchVectorWithIds(string table, string query, int limit)
 	{
 		ScoredResult[] results;
@@ -444,12 +653,10 @@ class HybridSearch {
 		try {
 			auto embedding = embedder.embed(query);
 
-			import std.math;
+			import std.format;
 
 			string blobStr = "X'";
 			foreach(f; embedding) {
-				import std.format;
-
 				uint bits = *cast(uint*)&f;
 				ubyte[4] bytes = (cast(ubyte*)&bits)[0 .. 4];
 				foreach(b; bytes)
@@ -486,6 +693,7 @@ class HybridSearch {
 				results ~= sr;
 			}
 		} catch(Exception e) {
+			logError("searchVectorWithIds on " ~ table ~ " failed: " ~ e.msg);
 		}
 
 		return results;
@@ -500,11 +708,23 @@ class HybridSearch {
 			if(!result.empty) {
 				return result.front["name"].as!string;
 			}
-		} catch(Exception) {
+		} catch(Exception e) {
+			logError("getPackageName failed for id " ~ id.text ~ ": " ~ e.msg);
 		}
 		return "";
 	}
 
+	/**
+	 * Resolves the import paths required for a fully qualified symbol.
+	 *
+	 * First checks the import_requirements table; if empty, infers the
+	 * module path from the symbol's fully qualified name.
+	 *
+	 * Params:
+	 *     fullyQualifiedName = The dot-separated fully qualified symbol name.
+	 *
+	 * Returns: An array of module paths to import.
+	 */
 	string[] getImportsForSymbol(string fullyQualifiedName)
 	{
 		string[] imports;
@@ -538,13 +758,22 @@ class HybridSearch {
 			if(imports.empty) {
 				imports ~= moduleName;
 			}
-		} catch(Exception) {
+		} catch(Exception e) {
+			logError("getImportsForSymbol failed for " ~ fullyQualifiedName ~ ": " ~ e.msg);
 			imports ~= moduleName;
 		}
 
 		return imports;
 	}
 
+	/**
+	 * Resolves import paths for multiple symbols, deduplicating the results.
+	 *
+	 * Params:
+	 *     symbols = An array of fully qualified symbol names.
+	 *
+	 * Returns: A deduplicated array of module paths to import.
+	 */
 	string[] getImportsForSymbols(string[] symbols)
 	{
 		string[string] uniqueImports;

@@ -1,3 +1,9 @@
+/**
+ * MCP tool for formatting D source code using dfmt.
+ *
+ * Pipes D source code through the `dfmt` formatter with configurable
+ * brace style, indentation, and line length options.
+ */
 module tools.dfmt;
 
 import std.json : JSONValue, parseJSON, JSONType;
@@ -6,6 +12,13 @@ import tools.base : BaseTool;
 import mcp.types : ToolResult;
 import utils.process : executeCommandWithInput;
 
+/**
+ * Tool that formats D source code according to configurable style guidelines.
+ *
+ * Accepts source code as input and returns the formatted result. Supports
+ * brace style (allman, otbs, stroustrup), indent size, and maximum line
+ * length configuration.
+ */
 class DfmtTool : BaseTool {
 	@property string name()
 	{

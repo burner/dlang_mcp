@@ -1,9 +1,16 @@
+/**
+ * JSON-RPC 2.0 protocol helpers for parsing requests and creating responses.
+ *
+ * Provides functions for deserializing JSON-RPC requests, serializing responses,
+ * and constructing standardized error responses for common failure modes.
+ */
 module mcp.protocol;
 
 import std.json : JSONValue, parseJSON, JSONType;
 import mcp.types : JsonRpcRequest, JsonRpcResponse, JsonRpcError, JsonRpcErrorCode;
 import utils.logging : logError;
 
+/** Exception thrown when a protocol-level error is encountered during parsing. */
 class ProtocolException : Exception {
 	this(string msg) pure nothrow @safe
 	{
@@ -11,6 +18,19 @@ class ProtocolException : Exception {
 	}
 }
 
+/**
+ * Parses a raw JSON string into a `JsonRpcRequest`.
+ *
+ * Validates the JSON structure, checks for the required "jsonrpc" version
+ * and "method" fields, and deserializes into the request struct.
+ *
+ * Params:
+ *     jsonLine = A single line of JSON text representing a JSON-RPC 2.0 request.
+ *
+ * Returns: A populated `JsonRpcRequest` struct.
+ *
+ * Throws: `ProtocolException` if the JSON is invalid or missing required fields.
+ */
 JsonRpcRequest parseRequest(string jsonLine)
 {
 	JSONValue json;
@@ -35,12 +55,31 @@ JsonRpcRequest parseRequest(string jsonLine)
 	return JsonRpcRequest.fromJSON(json);
 }
 
+/**
+ * Serializes a `JsonRpcResponse` to its JSON string representation.
+ *
+ * Params:
+ *     response = The response struct to serialize.
+ *
+ * Returns: A JSON string suitable for sending over a transport.
+ */
 string serializeResponse(JsonRpcResponse response)
 {
 	return response.toJSON().toString();
 }
 
-JsonRpcResponse createErrorResponse(int id, int code, string message,
+/**
+ * Creates a JSON-RPC error response with the given error code and message.
+ *
+ * Params:
+ *     id = The request identifier to include in the response (string, integer, or null).
+ *     code = The numeric JSON-RPC error code.
+ *     message = A human-readable error description.
+ *     data = Optional additional error data.
+ *
+ * Returns: A `JsonRpcResponse` with the error field populated.
+ */
+JsonRpcResponse createErrorResponse(JSONValue id, int code, string message,
 		JSONValue data = JSONValue.init)
 {
 	JsonRpcResponse response;
@@ -56,31 +95,79 @@ JsonRpcResponse createErrorResponse(int id, int code, string message,
 	return response;
 }
 
-JsonRpcResponse createParseErrorResponse(int id)
+/**
+ * Creates a parse error response (code -32700).
+ *
+ * Uses null id since the request could not be parsed to extract one.
+ *
+ * Returns: A `JsonRpcResponse` indicating a JSON parse error.
+ */
+JsonRpcResponse createParseErrorResponse()
 {
-	return createErrorResponse(id, JsonRpcErrorCode.ParseError, "Parse error");
+	return createErrorResponse(JSONValue(null), JsonRpcErrorCode.ParseError, "Parse error");
 }
 
-JsonRpcResponse createInvalidRequestResponse(int id, string message)
+/**
+ * Creates an invalid request error response (code -32600).
+ *
+ * Params:
+ *     id = The request identifier.
+ *     message = Description of what made the request invalid.
+ *
+ * Returns: A `JsonRpcResponse` indicating an invalid request.
+ */
+JsonRpcResponse createInvalidRequestResponse(JSONValue id, string message)
 {
 	return createErrorResponse(id, JsonRpcErrorCode.InvalidRequest, message);
 }
 
-JsonRpcResponse createMethodNotFoundResponse(int id, string method)
+/**
+ * Creates a method not found error response (code -32601).
+ *
+ * Params:
+ *     id = The request identifier.
+ *     method = The method name that was not found.
+ *
+ * Returns: A `JsonRpcResponse` indicating the method does not exist.
+ */
+JsonRpcResponse createMethodNotFoundResponse(JSONValue id, string method)
 {
 	return createErrorResponse(id, JsonRpcErrorCode.MethodNotFound, "Method not found: " ~ method);
 }
 
-JsonRpcResponse createInvalidParamsResponse(int id, string message)
+/**
+ * Creates an invalid params error response (code -32602).
+ *
+ * Params:
+ *     id = The request identifier.
+ *     message = Description of the parameter validation failure.
+ *
+ * Returns: A `JsonRpcResponse` indicating invalid parameters.
+ */
+JsonRpcResponse createInvalidParamsResponse(JSONValue id, string message)
 {
 	return createErrorResponse(id, JsonRpcErrorCode.InvalidParams, message);
 }
 
-JsonRpcResponse createInternalErrorResponse(int id, string message)
+/**
+ * Creates an internal error response (code -32603).
+ *
+ * Params:
+ *     id = The request identifier.
+ *     message = Description of the internal error.
+ *
+ * Returns: A `JsonRpcResponse` indicating a server-side error.
+ */
+JsonRpcResponse createInternalErrorResponse(JSONValue id, string message)
 {
 	return createErrorResponse(id, JsonRpcErrorCode.InternalError, message);
 }
 
+/**
+ * Creates an empty JSON object, used as a placeholder for null/empty values.
+ *
+ * Returns: A `JSONValue` containing an empty object `{}`.
+ */
 JSONValue nullJSON()
 {
 	JSONValue[string] empty;

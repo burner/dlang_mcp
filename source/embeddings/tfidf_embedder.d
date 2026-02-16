@@ -1,3 +1,6 @@
+/**
+ * TF-IDF embedding backend using term frequency-inverse document frequency vectors.
+ */
 module embeddings.tfidf_embedder;
 
 import embeddings.embedder;
@@ -9,12 +12,25 @@ import std.regex;
 import std.string;
 import std.ascii;
 
+/**
+ * Generates sparse-to-dense TF-IDF vector embeddings from text using a trainable vocabulary.
+ *
+ * The embedder maintains a vocabulary of terms mapped to vector indices and
+ * computes TF-IDF weights to produce fixed-length embedding vectors. The
+ * vocabulary can be trained on a corpus of documents or loaded from disk.
+ */
 class TfIdfEmbedder : Embedder {
 	private int _dimensions;
 	private string[string] vocabulary;
 	private double[] idf;
 	private bool _available = true;
 
+	/**
+	 * Construct a new TF-IDF embedder with a pre-seeded vocabulary.
+	 *
+	 * Params:
+	 *     dimensions = The size of the output embedding vectors (default 1000).
+	 */
 	this(int dimensions = 1000)
 	{
 		_dimensions = dimensions;
@@ -85,6 +101,14 @@ class TfIdfEmbedder : Embedder {
 		idf[] = 1.0;
 	}
 
+	/**
+	 * Embed a single text string into a TF-IDF vector.
+	 *
+	 * Params:
+	 *     text = The input text to embed.
+	 *
+	 * Returns: A normalized float array of length `dimensions()` representing the TF-IDF embedding.
+	 */
 	float[] embed(string text)
 	{
 		auto terms = tokenize(text);
@@ -112,6 +136,14 @@ class TfIdfEmbedder : Embedder {
 		return vec;
 	}
 
+	/**
+	 * Embed multiple text strings in one call.
+	 *
+	 * Params:
+	 *     texts = An array of input texts to embed.
+	 *
+	 * Returns: An array of float arrays, one TF-IDF embedding per input text.
+	 */
 	float[][] embedBatch(string[] texts)
 	{
 		float[][] results = new float[][](texts.length);
@@ -121,21 +153,39 @@ class TfIdfEmbedder : Embedder {
 		return results;
 	}
 
+	/**
+	 * Returns: The dimensionality of the embedding vectors produced by this backend.
+	 */
 	int dimensions()
 	{
 		return _dimensions;
 	}
 
+	/**
+	 * Returns: `true` if this TF-IDF backend is ready to produce vectors.
+	 */
 	bool isAvailable()
 	{
 		return _available;
 	}
 
+	/**
+	 * Returns: The string `"TF-IDF"`.
+	 */
 	string name()
 	{
 		return "TF-IDF";
 	}
 
+	/**
+	 * Train the TF-IDF model on a corpus of documents.
+	 *
+	 * Computes inverse document frequency weights and expands the vocabulary
+	 * with new terms found in the corpus, up to the configured dimensionality.
+	 *
+	 * Params:
+	 *     documents = An array of document strings to train on.
+	 */
 	void train(string[] documents)
 	{
 		int[string] termDocFreq;
@@ -177,6 +227,12 @@ class TfIdfEmbedder : Embedder {
 		}
 	}
 
+	/**
+	 * Add a single term to the vocabulary if space remains.
+	 *
+	 * Params:
+	 *     term = The term to add to the vocabulary.
+	 */
 	void addToVocabulary(string term)
 	{
 		if(term !in vocabulary && vocabulary.length < _dimensions) {
@@ -184,6 +240,14 @@ class TfIdfEmbedder : Embedder {
 		}
 	}
 
+	/**
+	 * Save the vocabulary and IDF weights to a JSON file.
+	 *
+	 * Params:
+	 *     path = File path to write the JSON output to.
+	 *
+	 * Throws: `Exception` if the file cannot be written.
+	 */
 	void save(string path)
 	{
 		import std.file : write;
@@ -211,6 +275,14 @@ class TfIdfEmbedder : Embedder {
 		write(path, toJSON(obj, false));
 	}
 
+	/**
+	 * Load vocabulary and IDF weights from a JSON file.
+	 *
+	 * Params:
+	 *     path = File path to read the JSON vocabulary from.
+	 *
+	 * Throws: `Exception` on JSON parse errors (caught internally; returns `false`).
+	 */
 	bool load(string path)
 	{
 		import std.file : exists, readText;

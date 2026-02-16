@@ -1,7 +1,6 @@
 module tests.unit.test_parser;
 
-import ingestion.ddoc_parser;
-import ingestion.enhanced_parser;
+import ingestion.ddoc_project_parser;
 import std.stdio;
 import std.file;
 import std.path;
@@ -101,31 +100,11 @@ class TestClass {
         std.file.write(testJson, jsonContent);
     }
 
-    void testParseJson()
-    {
-        auto parser = new DdocParser();
-        auto jsonPath = buildPath(testDataDir, "docs.json");
-        auto json = parseJSON(readText(jsonPath));
-
-        auto modules = parser.parseJsonDocs(json, "test-package");
-
-        assert(modules.length == 1);
-        assert(modules[0].name == "test");
-        assert(modules[0].functions.length >= 1);
-        assert(modules[0].functions[0].name == "add");
-        assert(modules[0].functions[0].performance.isNogc);
-        assert(modules[0].functions[0].performance.isPure);
-        assert(modules[0].functions[0].performance.isSafe);
-
-        writeln("  PASS: Parse DMD JSON");
-    }
-
     void testExtractUnittests()
     {
-        auto parser = new EnhancedDdocParser();
         auto sourcePath = buildPath(testDataDir, "test.d");
 
-        auto examples = parser.extractUnittestBlocks(sourcePath, "test-package");
+        auto examples = extractUnittestBlocks(sourcePath, "test-package");
 
         assert(examples.length >= 1);
         assert(examples[0].isUnittest);
@@ -148,14 +127,76 @@ void main() {
 }
         });
 
-        auto parser = new EnhancedDdocParser();
-        auto imports = parser.analyzeImportRequirements(testFile);
+        auto imports = analyzeImportRequirements(testFile);
 
         assert(imports.canFind("std.stdio"));
         assert(imports.canFind("std.algorithm"));
         assert(imports.canFind("std.range"));
 
         writeln("  PASS: Extract imports");
+    }
+
+    void testExtractDocExamples()
+    {
+        string docComment = "A simple function\nExample:\n---\nauto x = 1;\n---\n";
+        auto examples = extractDocExamples(docComment);
+        assert(examples.length >= 1);
+        assert(examples[0].canFind("auto x = 1"));
+
+        writeln("  PASS: Extract doc examples");
+    }
+
+    void testConversionFunctions()
+    {
+        import models;
+
+        // Test FuncInfo -> FunctionDoc conversion
+        FuncInfo func;
+        func.name = "add";
+        func.signature = "int add(int a, int b)";
+        func.returnType = "int";
+        func.docComment = "Adds two numbers";
+        func.parameters = ["int a", "int b"];
+        func.isSafe = true;
+        func.isNogc = true;
+        func.isPure = true;
+
+        auto funcDoc = toFunctionDoc(func, "test.mod", "test-pkg");
+        assert(funcDoc.name == "add");
+        assert(funcDoc.fullyQualifiedName == "test.mod.add");
+        assert(funcDoc.moduleName == "test.mod");
+        assert(funcDoc.packageName == "test-pkg");
+        assert(funcDoc.performance.isSafe);
+        assert(funcDoc.performance.isNogc);
+        assert(funcDoc.performance.isPure);
+
+        // Test ParsedType -> TypeDoc conversion
+        ParsedType type;
+        type.name = "MyClass";
+        type.kind = "class";
+        type.docComment = "A test class";
+        type.baseClasses = ["BaseClass"];
+
+        auto typeDoc = toTypeDoc(type, "test.mod", "test-pkg");
+        assert(typeDoc.name == "MyClass");
+        assert(typeDoc.fullyQualifiedName == "test.mod.MyClass");
+        assert(typeDoc.kind == "class");
+        assert(typeDoc.baseClasses.length == 1);
+
+        // Test ParsedModule -> ModuleDoc conversion
+        ParsedModule mod;
+        mod.name = "test.mod";
+        mod.docComment = "Test module";
+        mod.functions = [func];
+        mod.types = [type];
+
+        auto modDoc = toModuleDoc(mod, "test-pkg");
+        assert(modDoc.name == "test.mod");
+        assert(modDoc.packageName == "test-pkg");
+        assert(modDoc.functions.length == 1);
+        assert(modDoc.types.length == 1);
+
+        writeln("  PASS: Conversion functions");
     }
 
     void testPackageMetadataFromJSON()
@@ -191,9 +232,10 @@ void main() {
         setUp();
         scope(exit) tearDown();
 
-        testParseJson();
         testExtractUnittests();
         testExtractImports();
+        testExtractDocExamples();
+        testConversionFunctions();
         testPackageMetadataFromJSON();
 
         writeln("=== Parser Tests Complete ===");

@@ -1,3 +1,9 @@
+/**
+ * MCP tool for searching D types in the documentation database.
+ *
+ * Queries the hybrid search engine to find D types (classes, structs,
+ * interfaces, enums) matching a query by name or description.
+ */
 module tools.type_search;
 
 import std.json : JSONValue, parseJSON, JSONType;
@@ -7,6 +13,13 @@ import mcp.types : ToolResult;
 import storage.crud;
 import storage.search;
 
+/**
+ * Tool that searches for D types by name or description.
+ *
+ * Supports optional filtering by type kind (class, struct, interface, enum).
+ * Returns matching types with their definitions, documentation, and
+ * module/package context.
+ */
 class TypeSearchTool : SearchTool {
 	@property string name()
 	{

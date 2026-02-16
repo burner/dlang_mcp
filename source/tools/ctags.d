@@ -1,3 +1,10 @@
+/**
+ * MCP tool for searching symbol definitions using ctags.
+ *
+ * Generates and maintains a ctags index for D projects, supporting
+ * symbol lookup by exact name, prefix, or regex pattern with optional
+ * filtering by symbol kind (function, class, struct, etc.).
+ */
 module tools.ctags;
 
 import std.json : JSONValue, parseJSON, JSONType;
@@ -13,6 +20,13 @@ import mcp.types : ToolResult;
 import utils.process : executeCommand;
 import utils.ctags_parser : CtagsEntry, parseCtagsFile, searchEntries, formatEntry;
 
+/**
+ * Tool that searches for symbol definitions across a D project using ctags.
+ *
+ * Automatically generates or regenerates the tags file when it is missing
+ * or older than the source files. Supports exact, prefix, and regex matching
+ * with optional kind filtering.
+ */
 class CtagsSearchTool : BaseTool {
 	@property string name()
 	{
@@ -47,6 +61,11 @@ class CtagsSearchTool : BaseTool {
                 "kind": {
                     "type": "string",
                     "description": "Filter by symbol kind: f=function, c=class, s=struct, g=enum, i=interface, v=variable, e=enum member"
+                },
+                "source_dirs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Source directories to scan (relative to project_path). Auto-detected from dub config or defaults to ['source', 'src']."
                 }
             },
             "required": ["query"]
@@ -80,8 +99,10 @@ class CtagsSearchTool : BaseTool {
 				kindFilter = arguments["kind"].str;
 			}
 
-			if(needsRegeneration(projectPath, tagsPath)) {
-				string error = generateCtags(projectPath, tagsPath);
+			string[] sourceDirs = resolveSourceDirs(projectPath, arguments);
+
+			if(needsRegeneration(projectPath, tagsPath, sourceDirs)) {
+				string error = generateCtags(projectPath, tagsPath, sourceDirs);
 				if(error.length > 0) {
 					return createErrorResult(error);
 				}
@@ -97,39 +118,102 @@ class CtagsSearchTool : BaseTool {
 	}
 
 private:
-	bool needsRegeneration(string projectPath, string tagsPath)
+	string[] resolveSourceDirs(string projectPath, JSONValue arguments)
+	{
+		// If user explicitly provided source_dirs, use those
+		if("source_dirs" in arguments && arguments["source_dirs"].type == JSONType.array) {
+			string[] dirs;
+			foreach(item; arguments["source_dirs"].array) {
+				if(item.type == JSONType.string) {
+					auto dir = buildPath(projectPath, item.str);
+					if(exists(dir))
+						dirs ~= dir;
+				}
+			}
+			if(dirs.length > 0)
+				return dirs;
+		}
+
+		// Try to auto-detect from dub.json
+		auto dubJsonPath = buildPath(projectPath, "dub.json");
+		if(exists(dubJsonPath)) {
+			try {
+				import std.file : readText;
+				auto dubJson = parseJSON(readText(dubJsonPath));
+				if("importPaths" in dubJson && dubJson["importPaths"].type == JSONType.array) {
+					string[] dirs;
+					foreach(item; dubJson["importPaths"].array) {
+						if(item.type == JSONType.string) {
+							auto dir = buildPath(projectPath, item.str);
+							if(exists(dir))
+								dirs ~= dir;
+						}
+					}
+					if(dirs.length > 0)
+						return dirs;
+				}
+				if("sourcePaths" in dubJson && dubJson["sourcePaths"].type == JSONType.array) {
+					string[] dirs;
+					foreach(item; dubJson["sourcePaths"].array) {
+						if(item.type == JSONType.string) {
+							auto dir = buildPath(projectPath, item.str);
+							if(exists(dir))
+								dirs ~= dir;
+						}
+					}
+					if(dirs.length > 0)
+						return dirs;
+				}
+			} catch(Exception) {
+				// Fall through to defaults
+			}
+		}
+
+		// Default: try source/ then src/
+		string[] defaults;
+		auto sourceDir = buildPath(projectPath, "source");
+		if(exists(sourceDir))
+			defaults ~= sourceDir;
+		auto srcDir = buildPath(projectPath, "src");
+		if(exists(srcDir))
+			defaults ~= srcDir;
+
+		return defaults;
+	}
+
+	bool needsRegeneration(string projectPath, string tagsPath, string[] sourceDirs)
 	{
 		if(!exists(tagsPath))
 			return true;
 
 		auto tagsTime = timeLastModified(tagsPath);
 
-		auto sourceDir = buildPath(projectPath, "source");
-		if(!exists(sourceDir))
-			return false;
+		foreach(sourceDir; sourceDirs) {
+			if(!exists(sourceDir))
+				continue;
 
-		foreach(entry; dirEntries(sourceDir, "*.d", SpanMode.depth)) {
-			if(timeLastModified(entry.name) > tagsTime)
-				return true;
+			foreach(entry; dirEntries(sourceDir, "*.d", SpanMode.depth)) {
+				if(timeLastModified(entry.name) > tagsTime)
+					return true;
+			}
 		}
 
 		return false;
 	}
 
-	string generateCtags(string projectPath, string tagsPath)
+	string generateCtags(string projectPath, string tagsPath, string[] sourceDirs)
 	{
-		auto sourceDir = buildPath(projectPath, "source");
-		if(!exists(sourceDir)) {
-			return "Source directory not found: " ~ sourceDir;
-		}
-
 		string[] sourceFiles;
-		foreach(entry; dirEntries(sourceDir, "*.d", SpanMode.depth)) {
-			sourceFiles ~= entry.name;
+		foreach(sourceDir; sourceDirs) {
+			if(!exists(sourceDir))
+				continue;
+			foreach(entry; dirEntries(sourceDir, "*.d", SpanMode.depth)) {
+				sourceFiles ~= entry.name;
+			}
 		}
 
 		if(sourceFiles.length == 0) {
-			return "No D source files found in: " ~ sourceDir;
+			return "No D source files found in project: " ~ projectPath;
 		}
 
 		auto outputApp = appender!string;

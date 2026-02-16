@@ -1,3 +1,4 @@
+/** DUB registry crawler for fetching and caching D package metadata and source archives. */
 module ingestion.dub_crawler;
 
 import ingestion.http_client;
@@ -13,11 +14,25 @@ import std.array;
 import std.zip;
 import std.exception;
 
+/**
+ * Fetches package metadata and source code from the DUB registry API.
+ *
+ * Maintains a local filesystem cache of downloaded metadata and source archives
+ * to avoid redundant network requests across ingestion runs.
+ */
 class DubCrawler {
 	private string cacheDir;
 	private HTTPClient http;
 	private const string API_BASE = "https://code.dlang.org/api";
 
+	/**
+	 * Constructs a new DUB crawler with the specified cache directory.
+	 *
+	 * Creates the cache directory structure if it does not already exist.
+	 *
+	 * Params:
+	 *     cacheDir = Local directory path for storing cached metadata and sources.
+	 */
 	this(string cacheDir = "./data/cache")
 	{
 		this.cacheDir = cacheDir;
@@ -28,6 +43,12 @@ class DubCrawler {
 		mkdirRecurse(buildPath(cacheDir, "sources"));
 	}
 
+	/**
+	 * Fetches the complete list of package names from the DUB registry.
+	 *
+	 * Returns:
+	 *     An array of package name strings.
+	 */
 	string[] fetchAllPackages()
 	{
 		writeln("Fetching package list from code.dlang.org...");
@@ -52,6 +73,15 @@ class DubCrawler {
 		}
 	}
 
+	/**
+	 * Fetches metadata for a specific package, using the cache when available.
+	 *
+	 * Params:
+	 *     packageName = Name of the DUB package to look up.
+	 *
+	 * Returns:
+	 *     A `PackageMetadata` record containing version, description, and other info.
+	 */
 	PackageMetadata fetchPackageInfo(string packageName)
 	{
 		auto cacheFile = buildPath(cacheDir, "metadata", packageName ~ ".json");
@@ -79,6 +109,19 @@ class DubCrawler {
 		}
 	}
 
+	/**
+	 * Downloads and extracts the source archive for a package version.
+	 *
+	 * Returns the cached extraction directory if the source has already been
+	 * downloaded; otherwise downloads and extracts the ZIP archive.
+	 *
+	 * Params:
+	 *     packageName = Name of the DUB package.
+	 *     version_ = Version string of the package to download.
+	 *
+	 * Returns:
+	 *     Path to the directory containing the extracted source files.
+	 */
 	string downloadPackageSource(string packageName, string version_)
 	{
 		auto extractDir = buildPath(cacheDir, "sources", packageName ~ "-" ~ version_);
@@ -129,6 +172,18 @@ class DubCrawler {
 		}
 	}
 
+	/**
+	 * Locates the D source directory within an extracted package root.
+	 *
+	 * Checks for conventional `source/` and `src/` directories, including
+	 * those nested one level deep. Falls back to the package root itself.
+	 *
+	 * Params:
+	 *     packageRoot = Root directory of the extracted package.
+	 *
+	 * Returns:
+	 *     Path to the directory most likely containing D source files.
+	 */
 	string findSourceDirectory(string packageRoot)
 	{
 		string[] candidates = [
@@ -142,7 +197,8 @@ class DubCrawler {
 					candidates ~= buildPath(entry.name, "src");
 				}
 			}
-		} catch(Exception) {
+		} catch(Exception e) {
+			stderr.writeln("Warning: Failed to scan directory entries in ", packageRoot, ": ", e.msg);
 		}
 
 		foreach(candidate; candidates) {
@@ -154,6 +210,15 @@ class DubCrawler {
 		return packageRoot;
 	}
 
+	/**
+	 * Recursively finds all `.d` source files in a directory.
+	 *
+	 * Params:
+	 *     dir = Directory to search recursively.
+	 *
+	 * Returns:
+	 *     An array of absolute file paths to `.d` files.
+	 */
 	string[] findDFiles(string dir)
 	{
 		string[] files;
@@ -171,12 +236,22 @@ class DubCrawler {
 		return files;
 	}
 
+	/** Summary statistics about the local package cache. */
 	struct CacheStats {
+		/** Number of cached package metadata JSON files. */
 		ulong metadataCount;
+		/** Number of cached extracted source directories. */
 		ulong sourceCount;
+		/** Total size in bytes of all cached metadata files. */
 		ulong totalSize;
 	}
 
+	/**
+	 * Computes summary statistics for the local cache.
+	 *
+	 * Returns:
+	 *     A `CacheStats` struct with counts and total size.
+	 */
 	CacheStats getCacheStats()
 	{
 		CacheStats stats;
@@ -204,6 +279,10 @@ class DubCrawler {
 		return stats;
 	}
 
+	/**
+	 * Removes all cached metadata and source files, then recreates
+	 * the empty cache directory structure.
+	 */
 	void clearCache()
 	{
 		if(exists(cacheDir)) {
