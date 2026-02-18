@@ -39,6 +39,28 @@ struct ScoredResult {
 }
 
 /**
+ * Escape a user query for safe use in FTS5 MATCH expressions.
+ *
+ * Each whitespace-separated term is wrapped in double quotes so that FTS5
+ * metacharacters (dots, asterisks, operators, etc.) are treated as literal
+ * text rather than query syntax.  Internal double-quote characters are
+ * escaped by doubling them per the FTS5 specification.
+ *
+ * Examples:
+ *     "std.algorithm.filter" → `"std.algorithm.filter"`
+ *     `map "hello"` → `"map" "\"hello\""`  (inner quotes escaped)
+ */
+private string escapeFTS5Query(string query)
+{
+	auto terms = query.strip().split()
+		.filter!(t => t.length > 0)
+		.map!(t => `"` ~ t.replace(`"`, `""`) ~ `"`)
+		.array;
+
+	return terms.join(" ");
+}
+
+/**
  * Hybrid search engine that merges FTS5 and vector similarity results.
  *
  * Queries are executed against both the FTS5 indexes (for keyword relevance)
@@ -235,7 +257,7 @@ class HybridSearch {
                 ORDER BY fts.rank
                 LIMIT ?
             ");
-			ftsStmt.bind(1, opts.query);
+			ftsStmt.bind(1, escapeFTS5Query(opts.query));
 			ftsStmt.bind(2, opts.limit * 2);
 
 			foreach(row; ftsStmt.execute()) {
@@ -316,7 +338,7 @@ class HybridSearch {
 				stmt.bind(paramIdx++, opts.packageName);
 			}
 
-			stmt.bind(paramIdx++, opts.query);
+			stmt.bind(paramIdx++, escapeFTS5Query(opts.query));
 			stmt.bind(paramIdx++, opts.limit * 2);
 
 			foreach(row; stmt.execute()) {
@@ -440,7 +462,7 @@ class HybridSearch {
 				stmt.bind(paramIdx++, opts.kind);
 			}
 
-			stmt.bind(paramIdx++, opts.query);
+			stmt.bind(paramIdx++, escapeFTS5Query(opts.query));
 			stmt.bind(paramIdx++, opts.limit * 2);
 
 			foreach(row; stmt.execute()) {
@@ -554,7 +576,7 @@ class HybridSearch {
 				ftsStmt.bind(paramIdx++, opts.packageName);
 			}
 
-			ftsStmt.bind(paramIdx++, opts.query);
+			ftsStmt.bind(paramIdx++, escapeFTS5Query(opts.query));
 			ftsStmt.bind(paramIdx++, opts.limit * 2);
 
 			foreach(row; ftsStmt.execute()) {
