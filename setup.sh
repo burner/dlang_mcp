@@ -92,8 +92,10 @@ cd "$PROJECT_DIR"
 if [ "$SKIP_PACKAGES" = false ]; then
     echo ""
     echo "[6/7] Ingesting packages..."
-    echo "  Ingesting phobos (D standard library)..."
+    echo "  Ingesting D standard library components..."
     ./bin/dlang_mcp --ingest --package=phobos
+    ./bin/dlang_mcp --ingest --package=core
+    ./bin/dlang_mcp --ingest --package=etc
     echo "  Ingesting intel-intrinsics..."
     ./bin/dlang_mcp --ingest --package=intel-intrinsics
     

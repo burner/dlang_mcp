@@ -5,6 +5,7 @@ import storage.connection;
 import storage.crud;
 import ingestion.dub_crawler;
 import ingestion.ddoc_project_parser;
+import ingestion.compiler_detection;
 import embeddings.manager;
 import models;
 import d2sqlite3;
@@ -92,16 +93,49 @@ class IngestionPipeline {
 		auto transaction = Transaction(conn);
 
 		try {
-			auto metadata = crawler.fetchPackageInfo(packageName);
-			writeln("  Version: ", metadata.version_);
-			writeln("  Description: ", metadata.description);
+			long pkgId;
+			string srcDir;
+			string[] dFiles;
+			PackageMetadata metadata;
 
-			long pkgId = crud.insertPackage(metadata);
-			writeln("  Package ID: ", pkgId);
+			if(isSpecialPackage(packageName)) {
+				auto compilerPaths = detectCompilerPaths();
+				if(!compilerPaths.isValid()) {
+					throw new Exception("Failed to detect compiler paths for " ~ packageName);
+				}
 
-			auto sourceDir = crawler.downloadPackageSource(packageName, metadata.version_);
-			auto srcDir = crawler.findSourceDirectory(sourceDir);
-			auto dFiles = crawler.findDFiles(srcDir);
+				srcDir = getSpecialPackagePath(packageName, compilerPaths);
+				writeln("  Using compiler path: ", srcDir, " (", compilerPaths.compilerName, ")");
+
+				if(!exists(srcDir) || !isDir(srcDir)) {
+					throw new Exception("Path does not exist: " ~ srcDir);
+				}
+
+				metadata.name = packageName;
+				metadata.version_ = "builtin";
+				metadata.description = packageName == "phobos" 
+					? "D standard library (phobos/std)"
+					: packageName == "core"
+						? "D runtime (druntime/core)"
+						: "D etc utilities";
+				metadata.tags = [packageName, "builtin"];
+
+				pkgId = crud.insertPackage(metadata);
+				writeln("  Package ID: ", pkgId);
+
+				dFiles = crawler.findDFiles(srcDir);
+			} else {
+				metadata = crawler.fetchPackageInfo(packageName);
+				writeln("  Version: ", metadata.version_);
+				writeln("  Description: ", metadata.description);
+
+				pkgId = crud.insertPackage(metadata);
+				writeln("  Package ID: ", pkgId);
+
+				auto sourceDir = crawler.downloadPackageSource(packageName, metadata.version_);
+				srcDir = crawler.findSourceDirectory(sourceDir);
+				dFiles = crawler.findDFiles(srcDir);
+			}
 
 			writeln("  Found ", dFiles.length, " D source files");
 
@@ -110,7 +144,6 @@ class IngestionPipeline {
 			int typesCount = 0;
 			int examplesCount = 0;
 
-			// Try structured DMD JSON parsing first for functions/types
 			auto parseResult = parseProject(srcDir);
 			if(parseResult.error.length == 0 && parseResult.modules.length > 0) {
 				foreach(ref mod; parseResult.modules) {
@@ -121,7 +154,6 @@ class IngestionPipeline {
 					examplesCount += stored.examples;
 				}
 			} else {
-				// Fallback: store modules with unittest extraction only
 				if(parseResult.error.length > 0) {
 					stderr.writeln("  Note: DMD parse failed (", parseResult.error,
 							"), falling back to unittest-only extraction");
@@ -140,8 +172,7 @@ class IngestionPipeline {
 
 			if(conn.hasVectorSupport()) {
 				writeln("  Storing embeddings...");
-				string pkgText = metadata.name ~ " " ~ metadata.description ~ " " ~ metadata.tags.join(
-						" ");
+				string pkgText = metadata.name ~ " " ~ metadata.description ~ " " ~ metadata.tags.join(" ");
 				auto pkgEmbedding = embedder.embed(pkgText);
 				crud.storePackageEmbedding(pkgId, pkgEmbedding);
 			}
