@@ -31,7 +31,11 @@ echo ""
 
 echo "[1/7] Building project..."
 cd "$PROJECT_DIR"
-dub build
+if command -v ldc &> /dev/null; then
+    dub build --compiler=ldc --build=release-debug
+else
+    dub build
+fi
 
 echo ""
 echo "[2/7] Installing sqlite-vec..."
