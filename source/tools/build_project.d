@@ -9,12 +9,10 @@ module tools.build_project;
 
 import std.json : JSONValue, parseJSON, JSONType;
 import std.path : absolutePath;
-import std.string : strip, toLower, startsWith, indexOf;
-import std.array : appender, split;
-import std.conv : to;
 import tools.base : BaseTool;
 import mcp.types : ToolResult;
 import utils.process : executeCommandInDir, ProcessResult;
+import utils.diagnostic : mergeOutput, collectDiagnostics;
 
 /**
  * Tool that builds a D/dub project and reports structured build results.
@@ -107,66 +105,20 @@ class BuildProjectTool : BaseTool
 private:
     ToolResult formatBuildResult(ProcessResult result)
     {
-        // Combine stdout and stderr
-        string fullOutput = result.output;
-        if (result.stderrOutput.length > 0)
-        {
-            if (fullOutput.length > 0)
-                fullOutput ~= "\n";
-            fullOutput ~= result.stderrOutput;
-        }
-
+        string fullOutput = mergeOutput(result);
         bool success = result.status == 0;
 
-        // Parse compiler errors from the output
-        auto errors = appender!(JSONValue[]);
-        auto warnings = appender!(JSONValue[]);
-
-        foreach (line; fullOutput.split("\n"))
-        {
-            auto diag = parseDiagnostic(line);
-            if (diag.type == JSONType.null_)
-                continue;
-
-            if (diag["severity"].str == "error")
-                errors ~= diag;
-            else
-                warnings ~= diag;
-        }
+        auto diags = collectDiagnostics(fullOutput);
 
         auto resp = JSONValue([
             "success": JSONValue(success),
-            "errors": JSONValue(errors.data),
-            "warnings": JSONValue(warnings.data),
-            "error_count": JSONValue(errors.data.length),
-            "warning_count": JSONValue(warnings.data.length),
+            "errors": JSONValue(diags.errors),
+            "warnings": JSONValue(diags.warnings),
+            "error_count": JSONValue(diags.errors.length),
+            "warning_count": JSONValue(diags.warnings.length),
             "output": JSONValue(fullOutput),
         ]);
 
         return createTextResult(resp.toString());
-    }
-
-    /** Parse dmd/ldc2 diagnostic lines from dub output */
-    JSONValue parseDiagnostic(string line)
-    {
-        import std.regex : regex, matchFirst;
-
-        // Pattern: file(line): Error: message
-        // Or:      file(line,col): Error: message
-        auto re = regex(`^(.+?)\((\d+)(?:,(\d+))?\):\s*(Error|Warning|Deprecation)\s*:\s*(.+)$`);
-        auto m = matchFirst(line, re);
-
-        if (m.empty)
-            return JSONValue(null);
-
-        auto entry = JSONValue(string[string].init);
-        entry["file"] = JSONValue(m[1].idup);
-        entry["line"] = JSONValue(m[2].to!int);
-        if (m[3].length > 0)
-            entry["column"] = JSONValue(m[3].to!int);
-        entry["severity"] = JSONValue(m[4].idup.toLower());
-        entry["message"] = JSONValue(m[5].idup);
-
-        return entry;
     }
 }

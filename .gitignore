@@ -1,3 +1,4 @@
+# dub build artifacts
 .dub
 docs.json
 __dummy.html
@@ -15,3 +16,17 @@ dlang_mcp-test-*
 *.o
 *.obj
 *.lst
+
+# Build output directories
+bin/
+lib/
+
+# dub lock file (regenerated per environment)
+dub.selections.json
+
+# Runtime data (databases, caches, models)
+data/
+
+# Analysis artifacts
+*.txt
+!README.txt

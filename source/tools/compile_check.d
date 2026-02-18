@@ -9,16 +9,12 @@
 module tools.compile_check;
 
 import std.json : JSONValue, parseJSON, JSONType;
-import std.file : exists, write, remove, tempDir, readText;
-import std.path : buildPath, absolutePath, baseName;
-import std.string : strip, indexOf, startsWith, endsWith, format, toLower;
-import std.array : appender, array, split;
-import std.conv : text, to;
-import std.algorithm.iteration : map, filter;
-import std.algorithm.searching : canFind;
+import std.file : exists, write, remove, tempDir;
+import std.path : buildPath, absolutePath;
 import tools.base : BaseTool;
 import mcp.types : ToolResult;
 import utils.process : executeCommandInDir, executeCommand, ProcessResult;
+import utils.diagnostic : mergeOutput, collectDiagnostics;
 
 /**
  * Tool that compile-checks D source code and returns structured diagnostics.
@@ -163,8 +159,6 @@ class CompileCheckTool : BaseTool
                 code = arguments["code"].str;
                 // Write to temp file with a valid D module name
                 import std.uuid : randomUUID;
-                import std.algorithm.iteration : filter;
-                import std.conv : text;
                 string uuid = randomUUID().toString();
                 // Remove hyphens from UUID so the filename is a valid D identifier
                 string cleanId;
@@ -253,14 +247,7 @@ private:
 
     ToolResult formatResult(ProcessResult result, string tempPath, string originalFilePath)
     {
-        // executeCommand merges stderr into stdout
-        string compilerOutput = result.output;
-        if (result.stderrOutput.length > 0)
-        {
-            if (compilerOutput.length > 0)
-                compilerOutput ~= "\n";
-            compilerOutput ~= result.stderrOutput;
-        }
+        string compilerOutput = mergeOutput(result);
 
         if (result.status == 0 && compilerOutput.length == 0)
         {
@@ -273,88 +260,19 @@ private:
             return createTextResult(resp.toString());
         }
 
-        // Parse the compiler output into structured errors
-        auto errors = appender!(JSONValue[]);
-        auto warnings = appender!(JSONValue[]);
-        auto supplemental = appender!(JSONValue[]);
-
-        foreach (line; compilerOutput.split("\n"))
-        {
-            if (line.length == 0)
-                continue;
-
-            auto parsed = parseDiagnosticLine(line, tempPath, originalFilePath);
-            if (parsed.type == JSONType.null_)
-                continue;
-
-            string severity = parsed["severity"].str;
-            if (severity == "error")
-                errors ~= parsed;
-            else if (severity == "warning")
-                warnings ~= parsed;
-            else if (severity == "deprecation")
-                warnings ~= parsed;
-            else
-                supplemental ~= parsed;
-        }
+        auto diags = collectDiagnostics(compilerOutput, tempPath, originalFilePath);
 
         auto resp = JSONValue([
             "success": JSONValue(result.status == 0),
-            "errors": JSONValue(errors.data),
-            "warnings": JSONValue(warnings.data),
-            "error_count": JSONValue(errors.data.length),
-            "warning_count": JSONValue(warnings.data.length),
+            "errors": JSONValue(diags.errors),
+            "warnings": JSONValue(diags.warnings),
+            "error_count": JSONValue(diags.errors.length),
+            "warning_count": JSONValue(diags.warnings.length),
         ]);
 
-        if (supplemental.data.length > 0)
-            resp["supplemental"] = JSONValue(supplemental.data);
+        if (diags.supplemental.length > 0)
+            resp["supplemental"] = JSONValue(diags.supplemental);
 
         return createTextResult(resp.toString());
-    }
-
-    /**
-     * Parse a compiler diagnostic line like:
-     * file.d(10): Error: cannot implicitly convert ...
-     * file.d(10,5): Error: ...
-     */
-    JSONValue parseDiagnosticLine(string line, string tempPath, string originalFilePath)
-    {
-        import std.regex : regex, matchFirst;
-
-        // Pattern: file(line): severity: message
-        // Or:      file(line,col): severity: message
-        auto re = regex(`^(.+?)\((\d+)(?:,(\d+))?\):\s*(Error|Warning|Deprecation|error|warning|deprecation)\s*:\s*(.+)$`);
-        auto m = matchFirst(line, re);
-
-        if (m.empty)
-        {
-            // Check if it's a supplemental line (e.g. "       ^" or context)
-            // Or "Error: ..." without file info
-            auto reNoFile = regex(`^\s*(Error|Warning|Deprecation)\s*:\s*(.+)$`);
-            auto m2 = matchFirst(line, reNoFile);
-            if (!m2.empty)
-            {
-                auto entry = JSONValue(string[string].init);
-                entry["severity"] = JSONValue(m2[1].idup.toLower());
-                entry["message"] = JSONValue(m2[2].idup);
-                return entry;
-            }
-            return JSONValue(null);
-        }
-
-        string file = m[1].idup;
-        // Replace temp file path with something meaningful
-        if (tempPath.length > 0 && file == tempPath)
-            file = originalFilePath !is null ? originalFilePath : "<stdin>";
-
-        auto entry = JSONValue(string[string].init);
-        entry["file"] = JSONValue(file);
-        entry["line"] = JSONValue(m[2].to!int);
-        if (m[3].length > 0)
-            entry["column"] = JSONValue(m[3].to!int);
-        entry["severity"] = JSONValue(m[4].idup.toLower());
-        entry["message"] = JSONValue(m[5].idup);
-
-        return entry;
     }
 }

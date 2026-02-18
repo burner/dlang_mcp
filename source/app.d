@@ -31,6 +31,9 @@ import tools.list_modules : ListProjectModulesTool;
 import tools.compile_check : CompileCheckTool;
 import tools.build_project : BuildProjectTool;
 import tools.run_tests : RunTestsTool;
+import tools.run_project : RunProjectTool;
+import tools.fetch_package : FetchPackageTool;
+import tools.upgrade_deps : UpgradeDependenciesTool;
 import storage.connection : DBConnection;
 import storage.schema : SchemaManager;
 import storage.crud : CRUDOperations;
@@ -239,6 +242,9 @@ void printHelp()
 	writeln("  compile_check   - Compile-check D code (syntax/type errors)");
 	writeln("  build_project   - Build a D/dub project");
 	writeln("  run_tests       - Run dub project tests");
+	writeln("  run_project     - Run a D/dub project");
+	writeln("  fetch_package   - Fetch a package from the dub registry");
+	writeln("  upgrade_dependencies - Upgrade project dependencies");
 	writeln("  analyze_project - Analyze D project structure");
 	writeln("  ddoc_analyze    - Analyze project docs/attributes via DMD JSON");
 	writeln("  module_outline  - Get detailed module symbol outline");
@@ -340,6 +346,9 @@ void printFeatureStatus()
 	writeln("  ", OK, " compile_check          compile checking (always available)");
 	writeln("  ", OK, " build_project          dub build (always available)");
 	writeln("  ", OK, " run_tests              dub test (always available)");
+	writeln("  ", OK, " run_project            dub run (always available)");
+	writeln("  ", OK, " fetch_package          dub fetch (always available)");
+	writeln("  ", OK, " upgrade_dependencies   dub upgrade (always available)");
 	writeln("  ", OK, " analyze_project        project analysis (always available)");
 	writeln("  ", OK, " module_outline         module outline (always available)");
 	writeln("  ", OK, " list_modules           module listing (always available)");
@@ -537,6 +546,9 @@ private MCPServer createConfiguredServer()
 	server.registerTool(new CompileCheckTool());
 	server.registerTool(new BuildProjectTool());
 	server.registerTool(new RunTestsTool());
+	server.registerTool(new RunProjectTool());
+	server.registerTool(new FetchPackageTool());
+	server.registerTool(new UpgradeDependenciesTool());
 
 	if(exists(DEFAULT_DB_PATH)) {
 		server.registerTool(new PackageSearchTool());

@@ -9,13 +9,14 @@ module tools.run_tests;
 
 import std.json : JSONValue, parseJSON, JSONType;
 import std.path : absolutePath;
-import std.string : strip, toLower, startsWith, indexOf, endsWith;
+import std.string : strip;
 import std.array : appender, split;
 import std.conv : to;
 import std.algorithm.searching : canFind;
 import tools.base : BaseTool;
 import mcp.types : ToolResult;
 import utils.process : executeCommandInDir, ProcessResult;
+import utils.diagnostic : mergeOutput, parseDiagnostic;
 
 /**
  * Tool that runs tests for a D/dub project and reports structured results.
@@ -118,15 +119,7 @@ class RunTestsTool : BaseTool
 private:
     ToolResult formatTestResult(ProcessResult result)
     {
-        // Combine stdout and stderr
-        string fullOutput = result.output;
-        if (result.stderrOutput.length > 0)
-        {
-            if (fullOutput.length > 0)
-                fullOutput ~= "\n";
-            fullOutput ~= result.stderrOutput;
-        }
-
+        string fullOutput = mergeOutput(result);
         bool success = result.status == 0;
 
         // Parse errors (from compilation failures)
@@ -149,7 +142,7 @@ private:
 
             // Parse compilation errors
             auto diag = parseDiagnostic(line);
-            if (diag.type != JSONType.null_)
+            if (diag.type != JSONType.null_ && "file" in diag)
             {
                 if (diag["severity"].str == "error")
                     errors ~= diag;
@@ -217,28 +210,6 @@ private:
         ]);
 
         return createTextResult(resp.toString());
-    }
-
-    /** Parse dmd/ldc2 diagnostic lines */
-    JSONValue parseDiagnostic(string line)
-    {
-        import std.regex : regex, matchFirst;
-
-        auto re = regex(`^(.+?)\((\d+)(?:,(\d+))?\):\s*(Error|Warning|Deprecation)\s*:\s*(.+)$`);
-        auto m = matchFirst(line, re);
-
-        if (m.empty)
-            return JSONValue(null);
-
-        auto entry = JSONValue(string[string].init);
-        entry["file"] = JSONValue(m[1].idup);
-        entry["line"] = JSONValue(m[2].to!int);
-        if (m[3].length > 0)
-            entry["column"] = JSONValue(m[3].to!int);
-        entry["severity"] = JSONValue(m[4].idup.toLower());
-        entry["message"] = JSONValue(m[5].idup);
-
-        return entry;
     }
 
     /**

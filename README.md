@@ -15,14 +15,30 @@ MCP (Model Context Protocol) server for D language tools with semantic package s
 - **dscanner** - Static code analysis for D
 - **dfmt** - Code formatting
 - **ctags_search** - Symbol definition search
+- **compile_check** - Compile-check D source code without linking (syntax, type errors)
 - **ddoc_analyze** - Project-wide DDoc documentation analysis via DMD JSON
 
-### Semantic Search Tools
+### Build & Project Tools
+- **build_project** - Build a D/dub project with structured error reporting
+- **run_tests** - Run dub project tests with structured pass/fail results
+- **run_project** - Run a D/dub project, passing arguments to the built program
+- **fetch_package** - Fetch a package from the dub registry by name
+- **upgrade_dependencies** - Upgrade project dependencies to latest allowed versions
+- **analyze_project** - Analyze project structure (dependencies, source files, modules)
+
+### Code Navigation Tools
+- **get_module_outline** - Get a structured outline of all symbols in a D source file
+- **list_project_modules** - List all modules in a project with their public API
+
+### Semantic Search Tools (require database)
 - **search_packages** - Search D packages by name/description
 - **search_functions** - Search D functions by signature/docs
 - **search_types** - Search classes/structs/interfaces
 - **search_examples** - Search code examples
 - **get_imports** - Get import statements for symbols
+
+### Status
+- **get_feature_status** - Check which runtime features are enabled
 
 ## Installation
 
@@ -115,6 +131,21 @@ For opencode, add to `~/.config/opencode/opencode.json`:
       "type": "local",
       "command": ["/home/burner/Workspace/D/dlang_mcp/bin/dlang_mcp"],
       "enabled": true
+    }
+  }
+}
+```
+
+For Zed, add to your settings (`~/.config/zed/settings.json`):
+```json
+{
+  "context_servers": {
+    "dlang-mcp": {
+      "command": {
+        "path": "/path/to/dlang_mcp/bin/dlang_mcp",
+        "args": []
+      },
+      "settings": {}
     }
   }
 }
@@ -317,62 +348,68 @@ This installs all optional components and ingests example packages.
 ```
 dlang_mcp/
 ├── source/
-│   ├── app.d              # Entry point
+│   ├── app.d              # Entry point and CLI driver
 │   ├── mcp/               # MCP protocol
-│   │   ├── package.d
-│   │   ├── server.d       # MCP server
-│   │   ├── transport.d    # stdio transport
-│   │   ├── types.d        # JSON-RPC types
-│   │   └── protocol.d     # Request handling
+│   │   ├── server.d       # MCP server (tool registry, request dispatch)
+│   │   ├── protocol.d     # Request handling
+│   │   ├── transport.d    # Stdio transport
+│   │   ├── transport_interface.d
+│   │   ├── http_server.d  # HTTP transport (SSE + streamable)
+│   │   ├── http_transport.d
+│   │   └── types.d        # JSON-RPC types
 │   ├── tools/             # MCP tools
-│   │   ├── package.d
-│   │   ├── base.d         # Tool interface
+│   │   ├── base.d         # Tool interface and BaseTool
 │   │   ├── search_base.d  # Search tool base class
-│   │   ├── dscanner.d     # Code analysis
-│   │   ├── dfmt.d         # Formatting
+│   │   ├── dscanner.d     # Static analysis
+│   │   ├── dfmt.d         # Code formatting
 │   │   ├── ctags.d        # Symbol search
+│   │   ├── compile_check.d # Compile checking
+│   │   ├── build_project.d # dub build
+│   │   ├── run_tests.d    # dub test
+│   │   ├── run_project.d  # dub run
+│   │   ├── fetch_package.d # dub fetch
+│   │   ├── upgrade_deps.d # dub upgrade
+│   │   ├── analyze_project.d # dub describe / project analysis
 │   │   ├── ddoc_analyze.d # DDoc project analysis
+│   │   ├── outline.d      # Module outline
+│   │   ├── list_modules.d # Module listing
+│   │   ├── feature_status.d # Runtime feature status
 │   │   ├── package_search.d
 │   │   ├── function_search.d
 │   │   ├── type_search.d
 │   │   ├── example_search.d
 │   │   └── import_tool.d
 │   ├── storage/           # Database layer
-│   │   ├── package.d
 │   │   ├── connection.d   # SQLite wrapper
 │   │   ├── schema.d       # Table definitions
 │   │   ├── crud.d         # CRUD operations
 │   │   └── search.d       # Hybrid search
 │   ├── ingestion/         # Data pipeline
-│   │   ├── package.d
 │   │   ├── dub_crawler.d  # code.dlang.org crawler
 │   │   ├── pipeline.d     # Ingestion orchestration
-│   │   ├── ddoc_project_parser.d  # DMD JSON parser (functions, types, unittests)
+│   │   ├── ddoc_project_parser.d  # DMD JSON parser
 │   │   ├── http_client.d
 │   │   └── pattern_miner.d
 │   ├── embeddings/        # Vector embeddings
-│   │   ├── package.d
 │   │   ├── embedder.d     # Interface
 │   │   ├── tfidf_embedder.d
 │   │   ├── onnx_embedder.d
 │   │   └── manager.d
 │   ├── models/            # Data structures
-│   │   ├── package.d
 │   │   └── types.d
 │   └── utils/             # Utilities
 │       ├── ctags_parser.d
-│       ├── process.d       # Command execution
-│       └── logging.d
+│       ├── diagnostic.d   # Compiler diagnostic parsing
+│       ├── logging.d
+│       └── process.d      # Command execution
 ├── tests/                 # Test suite
 │   ├── runner.d
 │   ├── unit/
-│   │   ├── test_protocol.d
-│   │   ├── test_mcp_types.d
-│   │   ├── test_ctags_parser.d
-│   │   ├── test_server.d
 │   │   ├── test_embeddings.d
 │   │   ├── test_parser.d
-│   │   └── test_storage.d
+│   │   ├── test_storage.d
+│   │   ├── test_tools.d
+│   │   └── test_diagnostic.d
 │   └── integration/
 │       └── test_e2e_pipeline.d
 ├── data/                  # Runtime data
@@ -406,21 +443,21 @@ and unittest blocks from each package. All of this is stored in:
 
 ## Testing
 
-Build and run the full test suite:
+Run the default unit tests:
+
+```bash
+dub test
+```
+
+Or use the dedicated test runner configuration:
 
 ```bash
 dub build --config=test
 ./bin/dlang_mcp_test
 ```
 
-Or in one step:
-
-```bash
-dub run --configuration=test
-```
-
-The test suite covers protocol parsing, MCP types, ctags parsing, server dispatch,
-storage CRUD, D source parser, TF-IDF embeddings, and an end-to-end ingestion pipeline.
+The test suite covers storage CRUD, D source parsing, TF-IDF embeddings,
+tool instantiation/error handling, compiler diagnostic parsing, and an end-to-end ingestion pipeline.
 
 ## Architecture
 
