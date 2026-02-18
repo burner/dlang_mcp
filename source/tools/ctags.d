@@ -9,7 +9,7 @@ module tools.ctags;
 
 import std.json : JSONValue, parseJSON, JSONType;
 import std.file : exists, getTimes, timeLastModified, DirEntry, dirEntries, SpanMode;
-import std.path : buildPath, absolutePath;
+import std.path : buildPath;
 import std.string : strip;
 import std.array : appender;
 import std.conv : text;
@@ -75,6 +75,8 @@ class CtagsSearchTool : BaseTool {
 	ToolResult execute(JSONValue arguments)
 	{
 		try {
+			import std.path : absolutePath;
+
 			if(arguments.type != JSONType.object || !("query" in arguments)) {
 				return createErrorResult("Missing required 'query' parameter");
 			}
@@ -139,6 +141,7 @@ private:
 		if(exists(dubJsonPath)) {
 			try {
 				import std.file : readText;
+
 				auto dubJson = parseJSON(readText(dubJsonPath));
 				if("importPaths" in dubJson && dubJson["importPaths"].type == JSONType.array) {
 					string[] dirs;

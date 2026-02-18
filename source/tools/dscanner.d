@@ -135,6 +135,16 @@ class DscannerTool : BaseTool {
 			string configPath;
 			bool usesTempFile = true;
 
+			// Ensure temp files are cleaned up on any exit path
+			scope(exit) {
+				import std.exception : collectException;
+
+				if(tempPath.length > 0)
+					collectException(remove(tempPath));
+				if(configPath.length > 0)
+					collectException(remove(configPath));
+			}
+
 			switch(modeStr) {
 			case "lint":
 				command = buildLintCommand(arguments, filePath);
@@ -196,14 +206,8 @@ class DscannerTool : BaseTool {
 				write(tempPath, code);
 				command ~= tempPath;
 				result = executeCommand(command);
-				if(exists(tempPath))
-					remove(tempPath);
 			} else {
 				result = executeCommandWithInput(command, code);
-			}
-
-			if(configPath.length > 0 && exists(configPath)) {
-				remove(configPath);
 			}
 
 			return formatResult(result, modeStr, filePath);
@@ -240,7 +244,9 @@ private:
 	string maybeCreatePresetConfig(JSONValue arguments)
 	{
 		if("config" in arguments && arguments["config"].type == JSONType.string) {
-			return arguments["config"].str;
+			import std.path : absolutePath;
+
+			return absolutePath(arguments["config"].str);
 		}
 
 		string presetStr = "default";

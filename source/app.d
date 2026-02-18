@@ -23,7 +23,7 @@ import tools.function_search : FunctionSearchTool;
 import tools.type_search : TypeSearchTool;
 import tools.example_search : ExampleSearchTool;
 import tools.import_tool : ImportTool;
-import tools.feature_status : FeatureStatusTool, detectFeatures, buildFeatureStatusSummary;
+import tools.feature_status : FeatureStatusTool;
 import tools.analyze_project : AnalyzeProjectTool;
 import tools.ddoc_analyze : DdocAnalyzeTool;
 import tools.outline : ModuleOutlineTool;
@@ -31,6 +31,9 @@ import tools.list_modules : ListProjectModulesTool;
 import tools.compile_check : CompileCheckTool;
 import tools.build_project : BuildProjectTool;
 import tools.run_tests : RunTestsTool;
+import tools.run_project : RunProjectTool;
+import tools.fetch_package : FetchPackageTool;
+import tools.upgrade_deps : UpgradeDependenciesTool;
 import storage.connection : DBConnection;
 import storage.schema : SchemaManager;
 import storage.crud : CRUDOperations;
@@ -87,6 +90,8 @@ struct CliOptions {
 	string ddocAnalyzeOutput;
 	/** Enable verbose logging to stderr for debugging. */
 	bool verbose;
+	/** Process execution timeout in seconds (default: 30). */
+	int timeout = 30;
 }
 
 version(TestMode) {
@@ -105,23 +110,29 @@ version(TestMode) {
 			getopt(args, "init-db", "Initialize the search database",
 					&opts.initDb, "stats", "Show database statistics",
 					&opts.stats, "feature-status", "Show runtime feature status",
-					&opts.featureStatus, "help|h", "Show this help", &opts.help,
-					"mine-patterns", "Mine usage patterns", &opts.minePatterns,
-					"train-embeddings", "Re-train embeddings", &opts.trainEmbeddings,
-					"ingest", "Ingest packages", &opts.ingest, "ingest-status",
-					"Show ingestion progress", &opts.ingestStatus,
-					"fresh", "Fresh ingestion (with --ingest)", &opts.fresh, "limit",
-					"Limit packages (with --ingest)", &opts.limit, "package",
-					"Single package to ingest (with --ingest)", &opts.package_,
-				"test-search", "Test search with query", &opts.testSearch,
-				"analyze-project", "Analyze a D project at given path", &opts.analyzeProject,
-				"analyze-project-output", "Output file for --analyze-project (default: project_analysis.txt)", &opts.analyzeProjectOutput,
-				"ddoc-analyze", "Analyze project documentation/attributes via DMD JSON", &opts.ddocAnalyze,
-				"ddoc-analyze-output", "Output file for --ddoc-analyze (default: ddoc_analysis.txt)", &opts.ddocAnalyzeOutput,
-				"http", "Run MCP server with HTTP transport", &opts.http,
-				"port", "HTTP port (default: 3000)", &opts.port,
-				"host", "HTTP host (default: 127.0.0.1)", &opts.host,
-				"verbose|v", "Enable verbose logging to stderr", &opts.verbose,);
+					&opts.featureStatus, "help|h", "Show this help",
+					&opts.help, "mine-patterns", "Mine usage patterns",
+					&opts.minePatterns, "train-embeddings", "Re-train embeddings",
+					&opts.trainEmbeddings, "ingest", "Ingest packages",
+					&opts.ingest, "ingest-status", "Show ingestion progress",
+					&opts.ingestStatus, "fresh", "Fresh ingestion (with --ingest)",
+					&opts.fresh, "limit", "Limit packages (with --ingest)",
+					&opts.limit, "package", "Single package to ingest (with --ingest)",
+					&opts.package_, "test-search", "Test search with query",
+					&opts.testSearch, "analyze-project",
+					"Analyze a D project at given path", &opts.analyzeProject,
+					"analyze-project-output",
+					"Output file for --analyze-project (default: project_analysis.txt)",
+					&opts.analyzeProjectOutput, "ddoc-analyze",
+					"Analyze project documentation/attributes via DMD JSON",
+					&opts.ddocAnalyze, "ddoc-analyze-output",
+					"Output file for --ddoc-analyze (default: ddoc_analysis.txt)",
+					&opts.ddocAnalyzeOutput,
+					"http", "Run MCP server with HTTP transport", &opts.http,
+					"port", "HTTP port (default: 3000)", &opts.port, "host",
+					"HTTP host (default: 127.0.0.1)", &opts.host,
+					"verbose|v", "Enable verbose logging to stderr", &opts.verbose, "timeout",
+					"Process execution timeout in seconds (default: 30)", &opts.timeout,);
 		} catch(GetOptException e) {
 			stderr.writeln("Error: ", e.msg);
 			printHelp();
@@ -130,7 +141,16 @@ version(TestMode) {
 
 		if(opts.verbose) {
 			import utils.logging : enableVerboseLogging;
+
 			enableVerboseLogging();
+		}
+
+		// Set process execution timeout
+		{
+			import utils.process : setProcessTimeout;
+			import core.time : dur;
+
+			setProcessTimeout(dur!"seconds"(opts.timeout));
 		}
 
 		if(opts.help) {
@@ -205,7 +225,8 @@ void printHelp()
 	writeln("  ./bin/dlang_mcp --train-embeddings     Re-train embeddings");
 	writeln("  ./bin/dlang_mcp --mine-patterns        Mine usage patterns from indexed data");
 	writeln("  ./bin/dlang_mcp --test-search=QUERY    Test search with a query");
-	writeln("  ./bin/dlang_mcp --analyze-project=PATH Analyze a D project and write results to file");
+	writeln(
+			"  ./bin/dlang_mcp --analyze-project=PATH Analyze a D project and write results to file");
 	writeln("  ./bin/dlang_mcp --ddoc-analyze=PATH    Analyze project docs/attributes via DMD JSON");
 	writeln("  ./bin/dlang_mcp --help                 Show this help");
 	writeln("  ./bin/dlang_mcp --verbose              Enable verbose logging to stderr");
@@ -219,6 +240,7 @@ void printHelp()
 	writeln("  --http           Enable HTTP transport instead of stdio");
 	writeln("  --port=PORT      HTTP port (default: 3000)");
 	writeln("  --host=HOST      HTTP host (default: 127.0.0.1)");
+	writeln("  --timeout=SECS   Process execution timeout (default: 30)");
 	writeln();
 	writeln("Analyze options:");
 	writeln("  --analyze-project=PATH          Project path to analyze");
@@ -239,6 +261,9 @@ void printHelp()
 	writeln("  compile_check   - Compile-check D code (syntax/type errors)");
 	writeln("  build_project   - Build a D/dub project");
 	writeln("  run_tests       - Run dub project tests");
+	writeln("  run_project     - Run a D/dub project");
+	writeln("  fetch_package   - Fetch a package from the dub registry");
+	writeln("  upgrade_dependencies - Upgrade project dependencies");
 	writeln("  analyze_project - Analyze D project structure");
 	writeln("  ddoc_analyze    - Analyze project docs/attributes via DMD JSON");
 	writeln("  module_outline  - Get detailed module symbol outline");
@@ -274,7 +299,8 @@ void printFeatureStatus()
 	if(dbAvailable) {
 		try {
 			auto conn = new DBConnection(DEFAULT_DB_PATH);
-			scope(exit) conn.close();
+			scope(exit)
+				conn.close();
 			vecLoaded = conn.hasVectorSupport();
 			writeln("  ", vecLoaded ? OK : NO, " sqlite-vec              ",
 					vecLoaded ? "loaded" : "not loaded");
@@ -307,6 +333,7 @@ void printFeatureStatus()
 	if(onnxModelExists) {
 		try {
 			import bindbc.onnxruntime;
+
 			auto support = loadONNXRuntime();
 			onnxRuntimeAvailable = (support != ONNXRuntimeSupport.noLibrary
 					&& support != ONNXRuntimeSupport.badLibrary);
@@ -340,19 +367,22 @@ void printFeatureStatus()
 	writeln("  ", OK, " compile_check          compile checking (always available)");
 	writeln("  ", OK, " build_project          dub build (always available)");
 	writeln("  ", OK, " run_tests              dub test (always available)");
+	writeln("  ", OK, " run_project            dub run (always available)");
+	writeln("  ", OK, " fetch_package          dub fetch (always available)");
+	writeln("  ", OK, " upgrade_dependencies   dub upgrade (always available)");
 	writeln("  ", OK, " analyze_project        project analysis (always available)");
 	writeln("  ", OK, " module_outline         module outline (always available)");
 	writeln("  ", OK, " list_modules           module listing (always available)");
-	writeln("  ", dbAvailable ? OK : NO, " search_packages        ",
-			dbAvailable ? "available" : "requires --init-db");
-	writeln("  ", dbAvailable ? OK : NO, " search_functions       ",
-			dbAvailable ? "available" : "requires --init-db");
-	writeln("  ", dbAvailable ? OK : NO, " search_types           ",
-			dbAvailable ? "available" : "requires --init-db");
-	writeln("  ", dbAvailable ? OK : NO, " search_examples        ",
-			dbAvailable ? "available" : "requires --init-db");
-	writeln("  ", dbAvailable ? OK : NO, " get_imports            ",
-			dbAvailable ? "available" : "requires --init-db");
+	writeln("  ", dbAvailable ? OK : NO, " search_packages        ", dbAvailable
+			? "available" : "requires --init-db");
+	writeln("  ", dbAvailable ? OK : NO, " search_functions       ", dbAvailable
+			? "available" : "requires --init-db");
+	writeln("  ", dbAvailable ? OK : NO, " search_types           ", dbAvailable
+			? "available" : "requires --init-db");
+	writeln("  ", dbAvailable ? OK : NO, " search_examples        ", dbAvailable
+			? "available" : "requires --init-db");
+	writeln("  ", dbAvailable ? OK : NO, " get_imports            ", dbAvailable
+			? "available" : "requires --init-db");
 
 	// --- Search mode ---
 	writeln();
@@ -387,7 +417,7 @@ private void checkExternalTool(string name, string[] command)
 		} else {
 			writeln("  ", NO, " ", name, padding, "found but returned error");
 		}
-	} 	catch(Exception) {
+	} catch(Exception) {
 		writeln("  ", NO, " ", name, padding, "not found in PATH");
 	}
 }
@@ -403,7 +433,8 @@ void initializeDatabase()
 	writeln("Initializing search database...");
 
 	auto conn = new DBConnection(DEFAULT_DB_PATH);
-	scope(exit) conn.close();
+	scope(exit)
+		conn.close();
 	auto schema = new SchemaManager(conn);
 
 	schema.initializeSchema();
@@ -431,7 +462,8 @@ void printStats()
 	}
 
 	auto conn = new DBConnection(DEFAULT_DB_PATH);
-	scope(exit) conn.close();
+	scope(exit)
+		conn.close();
 	auto crud = new CRUDOperations(conn);
 
 	auto stats = crud.getStats();
@@ -522,10 +554,6 @@ private MCPServer createConfiguredServer()
 {
 	auto server = new MCPServer();
 
-	// Compute feature status at startup for the initialize response
-	auto fullStatus = detectFeatures();
-	server.setFeatureStatus(buildFeatureStatusSummary(fullStatus));
-
 	server.registerTool(new DscannerTool());
 	server.registerTool(new DfmtTool());
 	server.registerTool(new CtagsSearchTool());
@@ -537,14 +565,17 @@ private MCPServer createConfiguredServer()
 	server.registerTool(new CompileCheckTool());
 	server.registerTool(new BuildProjectTool());
 	server.registerTool(new RunTestsTool());
+	server.registerTool(new RunProjectTool());
+	server.registerTool(new FetchPackageTool());
+	server.registerTool(new UpgradeDependenciesTool());
 
-	if(exists(DEFAULT_DB_PATH)) {
-		server.registerTool(new PackageSearchTool());
-		server.registerTool(new FunctionSearchTool());
-		server.registerTool(new TypeSearchTool());
-		server.registerTool(new ExampleSearchTool());
-		server.registerTool(new ImportTool());
-	}
+	// Always register search tools so they appear in tools/list.
+	// They return a helpful error at call time if the DB is missing.
+	server.registerTool(new PackageSearchTool());
+	server.registerTool(new FunctionSearchTool());
+	server.registerTool(new TypeSearchTool());
+	server.registerTool(new ExampleSearchTool());
+	server.registerTool(new ImportTool());
 
 	return server;
 }
@@ -563,8 +594,8 @@ void runMcpServer()
  * Start the MCP server using HTTP transport.
  *
  * Params:
- *     host = The network address to bind the HTTP server to.
- *     port = The TCP port to listen on.
+ *     host       = The network address to bind the HTTP server to.
+ *     port       = The TCP port to listen on.
  */
 void runHttpServer(string host, ushort port)
 {
@@ -609,8 +640,8 @@ void testSearch(string query)
 		auto codeLines = ex.signature.splitter('\n');
 		writeln("   Code: ");
 		int lineCount;
-		foreach (line; codeLines) {
-			if (lineCount >= 6) {
+		foreach(line; codeLines) {
+			if(lineCount >= 6) {
 				writeln("         ... (truncated)");
 				break;
 			}
@@ -645,7 +676,8 @@ void runAnalyzeProject(string projectPath, string outputPath)
 	auto result = tool.execute(args);
 
 	if(result.isError) {
-		stderr.writeln("Error: ", result.content.length > 0 ? result.content[0].text : "unknown error");
+		stderr.writeln("Error: ", result.content.length > 0
+				? result.content[0].text : "unknown error");
 		return;
 	}
 
@@ -685,7 +717,8 @@ void runDdocAnalyze(string projectPath, string outputPath)
 	auto result = tool.execute(args);
 
 	if(result.isError) {
-		stderr.writeln("Error: ", result.content.length > 0 ? result.content[0].text : "unknown error");
+		stderr.writeln("Error: ", result.content.length > 0
+				? result.content[0].text : "unknown error");
 		return;
 	}
 

@@ -15,12 +15,17 @@ import vibe.core.stream;
 import vibe.stream.operations : readAll;
 import mcp.server : MCPServer;
 import mcp.http_transport : SSETransport, StreamableHTTPTransport, HTTPRequest;
-import mcp.protocol : parseRequest, serializeResponse, createParseErrorResponse,
-	ProtocolException;
+import mcp.protocol : parseRequest, serializeResponse,
+	createParseErrorResponse, ProtocolException;
+import mcp.types : JsonRpcRequest;
 import utils.logging : logInfo, logError;
 import std.json : JSONValue;
 import std.conv : to;
 import std.datetime : dur;
+
+// ---------------------------------------------------------------------------
+// HTTP Server
+// ---------------------------------------------------------------------------
 
 /**
  * HTTP server that wraps an `MCPServer` and exposes it over HTTP endpoints.
@@ -42,9 +47,9 @@ class MCPHTTPServer {
 	 * Constructs an HTTP server wrapping the given MCP server.
 	 *
 	 * Params:
-	 *     mcpServer = The MCP server to delegate requests to.
-	 *     host = The network interface to bind to.
-	 *     port = The TCP port to listen on.
+	 *     mcpServer  = The MCP server to delegate requests to.
+	 *     host       = The network interface to bind to.
+	 *     port       = The TCP port to listen on.
 	 */
 	this(MCPServer mcpServer, string host = "127.0.0.1", ushort port = 3000)
 	{
@@ -78,6 +83,10 @@ class MCPHTTPServer {
 
 		runApplication();
 	}
+
+	// -----------------------------------------------------------------------
+	// Route handlers
+	// -----------------------------------------------------------------------
 
 	/**
 	 * Handles `GET /health` requests, returning a simple JSON status object.
@@ -171,10 +180,16 @@ class MCPHTTPServer {
 			return;
 		}
 
-		auto body = cast(string)readAll(req.bodyReader);
+		auto body_ = cast(string)readAll(req.bodyReader);
 
 		try {
-			auto request = parseRequest(body);
+			auto request = parseRequest(body_);
+			// Notifications must not receive a response per JSON-RPC 2.0
+			if(request.isNotification) {
+				_mcpServer.handleNotification(request);
+				res.statusCode = HTTPStatus.noContent;
+				return;
+			}
 			auto response = _mcpServer.handleRequest(request);
 			res.headers["Content-Type"] = "application/json";
 			res.writeBody(serializeResponse(response));
@@ -202,10 +217,16 @@ class MCPHTTPServer {
 	 */
 	void handleMCP(HTTPServerRequest req, HTTPServerResponse res)
 	{
-		auto body = cast(string)readAll(req.bodyReader);
+		auto body_ = cast(string)readAll(req.bodyReader);
 
 		try {
-			auto request = parseRequest(body);
+			auto request = parseRequest(body_);
+			// Notifications must not receive a response per JSON-RPC 2.0
+			if(request.isNotification) {
+				_mcpServer.handleNotification(request);
+				res.statusCode = HTTPStatus.noContent;
+				return;
+			}
 			auto response = _mcpServer.handleRequest(request);
 			res.headers["Content-Type"] = "application/json";
 			res.writeBody(serializeResponse(response));

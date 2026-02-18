@@ -9,13 +9,12 @@ module mcp.server;
 
 import std.algorithm : sort;
 import std.array : array;
-import std.json : JSONValue, parseJSON, JSONType;
+import std.json : JSONValue, parseJSON;
 import mcp.types : JsonRpcResponse, JsonRpcRequest, ServerCapabilities,
 	ServerInfo, ToolsCapability, ToolDefinition, ToolResult;
-import mcp.protocol : parseRequest, serializeResponse, createErrorResponse,
-	createMethodNotFoundResponse, createInvalidParamsResponse,
-	createInternalErrorResponse, createParseErrorResponse, nullJSON,
-	ProtocolException;
+import mcp.protocol : parseRequest, serializeResponse, createErrorResponse, createMethodNotFoundResponse,
+	createInvalidParamsResponse, createInternalErrorResponse,
+	createParseErrorResponse, ProtocolException;
 import mcp.transport : StdioTransport, EOFException;
 import mcp.transport_interface : Transport;
 import tools.base : Tool;
@@ -32,18 +31,6 @@ import utils.logging : logInfo, logError, logDebug;
 class MCPServer {
 	private Tool[string] tools;
 	private bool initialized = false;
-	private JSONValue featureStatus;
-
-	/**
-	 * Sets the feature status metadata included in the initialization response.
-	 *
-	 * Params:
-	 *     status = A JSON object describing which runtime features are available.
-	 */
-	void setFeatureStatus(JSONValue status)
-	{
-		featureStatus = status;
-	}
 
 	/**
 	 * Registers a tool that can be invoked via `tools/call` requests.
@@ -116,7 +103,7 @@ class MCPServer {
 	 * Params:
 	 *     request = The notification request.
 	 */
-	private void handleNotification(ref const JsonRpcRequest request)
+	package void handleNotification(ref const JsonRpcRequest request)
 	{
 		switch(request.method) {
 		case "notifications/initialized":
@@ -145,14 +132,28 @@ class MCPServer {
 			return handleToolsList(request.id);
 		case "tools/call":
 			return handleToolsCall(request.id, request.params);
-		case "notifications/initialized":
-			// If a client sends this with an id (non-standard but tolerable),
-			// return an empty success response.
-			JsonRpcResponse response;
-			response.jsonrpc = "2.0";
-			response.id = request.id;
-			response.result = nullJSON();
-			return response;
+		case "ping":
+			JsonRpcResponse pingResponse;
+			pingResponse.jsonrpc = "2.0";
+			pingResponse.id = request.id;
+			pingResponse.result = JSONValue(cast(string[string])null);
+			return pingResponse;
+		case "resources/list":
+			JsonRpcResponse resListResponse;
+			resListResponse.jsonrpc = "2.0";
+			resListResponse.id = request.id;
+			JSONValue resListResult;
+			resListResult["resources"] = JSONValue(cast(JSONValue[])[]);
+			resListResponse.result = resListResult;
+			return resListResponse;
+		case "prompts/list":
+			JsonRpcResponse promptsResponse;
+			promptsResponse.jsonrpc = "2.0";
+			promptsResponse.id = request.id;
+			JSONValue promptsResult;
+			promptsResult["prompts"] = JSONValue(cast(JSONValue[])[]);
+			promptsResponse.result = promptsResult;
+			return promptsResponse;
 		default:
 			return createMethodNotFoundResponse(request.id, request.method);
 		}
@@ -161,7 +162,7 @@ class MCPServer {
 	/**
 	 * Handles the `initialize` method, performing the MCP handshake.
 	 *
-	 * Returns server capabilities, version info, and feature status to the client.
+	 * Returns server capabilities and version info to the client.
 	 *
 	 * Params:
 	 *     id = The JSON-RPC request identifier.
@@ -177,8 +178,6 @@ class MCPServer {
 		caps.tools = ToolsCapability(false);
 
 		auto serverInfo = ServerInfo("dlang_mcp", "1.0.0").toJSON();
-		if (featureStatus.type != JSONType.null_)
-			serverInfo["featureStatus"] = featureStatus;
 
 		JSONValue result;
 		result["protocolVersion"] = JSONValue("2024-11-05");
@@ -205,6 +204,10 @@ class MCPServer {
 	 */
 	JsonRpcResponse handleToolsList(JSONValue id)
 	{
+		if(!initialized) {
+			return createInvalidParamsResponse(id, "Server not initialized");
+		}
+
 		// Sort tool names for deterministic ordering
 		auto sortedNames = tools.keys.array.sort().array;
 
@@ -271,7 +274,19 @@ class MCPServer {
 			return response;
 		} catch(Exception e) {
 			logError("Tool execution error: " ~ e.msg);
-			return createInternalErrorResponse(id, "Tool execution failed: " ~ e.msg);
+			// Return a successful JSON-RPC response with isError: true.
+			// Per MCP spec, tool execution failures should NOT be JSON-RPC errors;
+			// those are reserved for protocol-level issues.
+			import mcp.types : Content;
+
+			auto errorResult = ToolResult([
+				Content("text", "Tool execution failed: " ~ e.msg)
+			], true);
+			JsonRpcResponse response;
+			response.jsonrpc = "2.0";
+			response.id = id;
+			response.result = errorResult.toJSON();
+			return response;
 		}
 	}
 }

@@ -27,13 +27,16 @@ class ImportTool : SearchTool {
 
 	@property string description()
 	{
-		return "Get the required import statements for D symbols (functions, types, modules). Returns import statements needed to use the specified symbols.";
+		return "Get the required import statements for D symbols (functions, types, modules). "
+			~ "Returns import statements needed to use the specified symbols. "
+			~ "Either 'symbol' or 'symbols' must be provided.";
 	}
 
 	@property JSONValue inputSchema()
 	{
 		return parseJSON(`{
             "type": "object",
+            "description": "Provide either 'symbol' (single name) or 'symbols' (array of names). At least one is required.",
             "properties": {
                 "symbols": {
                     "type": "array",
@@ -44,8 +47,7 @@ class ImportTool : SearchTool {
                     "type": "string",
                     "description": "Single symbol name (alternative to symbols array)"
                 }
-            },
-            "required": []
+            }
         }`);
 	}
 

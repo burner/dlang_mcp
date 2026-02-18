@@ -9,13 +9,14 @@ module tools.run_tests;
 
 import std.json : JSONValue, parseJSON, JSONType;
 import std.path : absolutePath;
-import std.string : strip, toLower, startsWith, indexOf, endsWith;
+import std.string : strip;
 import std.array : appender, split;
 import std.conv : to;
 import std.algorithm.searching : canFind;
 import tools.base : BaseTool;
 import mcp.types : ToolResult;
 import utils.process : executeCommandInDir, ProcessResult;
+import utils.diagnostic : mergeOutput, parseDiagnostic;
 
 /**
  * Tool that runs tests for a D/dub project and reports structured results.
@@ -24,23 +25,22 @@ import utils.process : executeCommandInDir, ProcessResult;
  * and verbose output mode. Parses both compiler diagnostics and test failure
  * messages into structured records.
  */
-class RunTestsTool : BaseTool
-{
-    @property string name()
-    {
-        return "run_tests";
-    }
+class RunTestsTool : BaseTool {
+	@property string name()
+	{
+		return "run_tests";
+	}
 
-    @property string description()
-    {
-        return "Run tests for a D/dub project. Executes 'dub test' and returns structured results "
-            ~ "including pass/fail status, test output, compiler errors if build fails, and summary. "
-            ~ "Supports configuration selection, compiler choice, and verbose mode.";
-    }
+	@property string description()
+	{
+		return "Run tests for a D/dub project. Executes 'dub test' and returns structured results "
+			~ "including pass/fail status, test output, compiler errors if build fails, and summary. "
+			~ "Supports configuration selection, compiler choice, and verbose mode.";
+	}
 
-    @property JSONValue inputSchema()
-    {
-        return parseJSON(`{
+	@property JSONValue inputSchema()
+	{
+		return parseJSON(`{
             "type": "object",
             "properties": {
                 "project_path": {
@@ -50,7 +50,7 @@ class RunTestsTool : BaseTool
                 },
                 "compiler": {
                     "type": "string",
-                    "enum": ["dmd", "ldc2"],
+                    "enum": ["dmd", "ldc2", "gdc"],
                     "description": "Which D compiler to use (default: project default)"
                 },
                 "configuration": {
@@ -68,217 +68,180 @@ class RunTestsTool : BaseTool
                 }
             }
         }`);
-    }
+	}
 
-    ToolResult execute(JSONValue arguments)
-    {
-        try
-        {
-            string projectPath = ".";
-            if ("project_path" in arguments && arguments["project_path"].type == JSONType.string)
-                projectPath = arguments["project_path"].str;
+	ToolResult execute(JSONValue arguments)
+	{
+		try {
+			import std.path : absolutePath;
+			import utils.security : validateCompiler;
 
-            projectPath = absolutePath(projectPath);
+			string projectPath = ".";
+			if("project_path" in arguments && arguments["project_path"].type == JSONType.string)
+				projectPath = arguments["project_path"].str;
 
-            string[] cmd = ["dub", "test", "--root=" ~ projectPath];
+			projectPath = absolutePath(projectPath);
 
-            if ("compiler" in arguments && arguments["compiler"].type == JSONType.string)
-                cmd ~= ["--compiler=" ~ arguments["compiler"].str];
+			string[] cmd = ["dub", "test", "--root=" ~ projectPath];
 
-            if ("configuration" in arguments && arguments["configuration"].type == JSONType.string)
-                cmd ~= ["--config=" ~ arguments["configuration"].str];
+			if("compiler" in arguments && arguments["compiler"].type == JSONType.string)
+				cmd ~= [
+				"--compiler=" ~ validateCompiler(arguments["compiler"].str)
+			];
 
-            // dub test passes extra args after -- to the test runner
-            bool hasExtraArgs = false;
+			if("configuration" in arguments && arguments["configuration"].type == JSONType.string)
+				cmd ~= ["--config=" ~ arguments["configuration"].str];
 
-            if ("verbose" in arguments && arguments["verbose"].type == JSONType.true_)
-            {
-                cmd ~= "--";
-                cmd ~= "-v";
-                hasExtraArgs = true;
-            }
+			// dub test passes extra args after -- to the test runner
+			bool hasExtraArgs = false;
 
-            if ("filter" in arguments && arguments["filter"].type == JSONType.string)
-            {
-                if (!hasExtraArgs)
-                    cmd ~= "--";
-                cmd ~= ["--filter", arguments["filter"].str];
-            }
+			if("verbose" in arguments && arguments["verbose"].type == JSONType.true_) {
+				cmd ~= "--";
+				cmd ~= "-v";
+				hasExtraArgs = true;
+			}
 
-            auto result = executeCommandInDir(cmd);
+			if("filter" in arguments && arguments["filter"].type == JSONType.string) {
+				if(!hasExtraArgs)
+					cmd ~= "--";
+				cmd ~= ["--filter", arguments["filter"].str];
+			}
 
-            return formatTestResult(result);
-        }
-        catch (Exception e)
-        {
-            return createErrorResult("Error running dub test: " ~ e.msg);
-        }
-    }
+			auto result = executeCommandInDir(cmd);
+
+			return formatTestResult(result);
+		} catch(Exception e) {
+			return createErrorResult("Error running dub test: " ~ e.msg);
+		}
+	}
 
 private:
-    ToolResult formatTestResult(ProcessResult result)
-    {
-        // Combine stdout and stderr
-        string fullOutput = result.output;
-        if (result.stderrOutput.length > 0)
-        {
-            if (fullOutput.length > 0)
-                fullOutput ~= "\n";
-            fullOutput ~= result.stderrOutput;
-        }
+	ToolResult formatTestResult(ProcessResult result)
+	{
+		string fullOutput = mergeOutput(result);
+		bool success = result.status == 0;
 
-        bool success = result.status == 0;
+		// Parse errors (from compilation failures)
+		auto errors = appender!(JSONValue[]);
+		auto warnings = appender!(JSONValue[]);
 
-        // Parse errors (from compilation failures)
-        auto errors = appender!(JSONValue[]);
-        auto warnings = appender!(JSONValue[]);
+		// Parse test results
+		auto testFailures = appender!(JSONValue[]);
+		int testsRun = 0;
+		int testsPassed = 0;
+		int testsFailed = 0;
 
-        // Parse test results
-        auto testFailures = appender!(JSONValue[]);
-        int testsRun = 0;
-        int testsPassed = 0;
-        int testsFailed = 0;
+		string phase = "build"; // build -> test
 
-        string phase = "build"; // build -> test
+		foreach(line; fullOutput.split("\n")) {
+			// Detect transition from build to test phase
+			if(line.canFind("Running") && line.canFind("test"))
+				phase = "test";
 
-        foreach (line; fullOutput.split("\n"))
-        {
-            // Detect transition from build to test phase
-            if (line.canFind("Running") && line.canFind("test"))
-                phase = "test";
+			// Parse compilation errors
+			auto diag = parseDiagnostic(line);
+			if(diag.type != JSONType.null_ && "file" in diag) {
+				if(diag["severity"].str == "error")
+					errors ~= diag;
+				else
+					warnings ~= diag;
+				continue;
+			}
 
-            // Parse compilation errors
-            auto diag = parseDiagnostic(line);
-            if (diag.type != JSONType.null_)
-            {
-                if (diag["severity"].str == "error")
-                    errors ~= diag;
-                else
-                    warnings ~= diag;
-                continue;
-            }
+			// Parse test runner output
+			// D's built-in test runner outputs lines like:
+			// core.exception.AssertError@source/file.d(42): assertion failure
+			// Also "X modules passed unittests" or "N/M modules FAILED"
+			if(line.canFind("modules passed unittests")) {
+				// "42 modules passed unittests"
+				auto parts = line.strip().split(" ");
+				if(parts.length > 0) {
+					try {
+						testsPassed = parts[0].to!int;
+					} catch(Exception) {
+					}
+				}
+			} else if(line.canFind("modules FAILED")) {
+				// "2/42 modules FAILED unittests"
+				auto parts = line.strip().split(" ");
+				if(parts.length > 0) {
+					auto fraction = parts[0].split("/");
+					if(fraction.length == 2) {
+						try {
+							testsFailed = fraction[0].to!int;
+							testsRun = fraction[1].to!int;
+						} catch(Exception) {
+						}
+					}
+				}
+			} else if(line.canFind("AssertError")
+					|| line.canFind("assertion failure") || line.canFind("Assertion failure")) {
+				auto failure = parseTestFailure(line);
+				if(failure.type != JSONType.null_)
+					testFailures ~= failure;
+			}
+		}
 
-            // Parse test runner output
-            // D's built-in test runner outputs lines like:
-            // core.exception.AssertError@source/file.d(42): assertion failure
-            // Also "X modules passed unittests" or "N/M modules FAILED"
-            if (line.canFind("modules passed unittests"))
-            {
-                // "42 modules passed unittests"
-                auto parts = line.strip().split(" ");
-                if (parts.length > 0)
-                {
-                    try { testsPassed = parts[0].to!int; } catch (Exception) {}
-                }
-            }
-            else if (line.canFind("modules FAILED"))
-            {
-                // "2/42 modules FAILED unittests"
-                auto parts = line.strip().split(" ");
-                if (parts.length > 0)
-                {
-                    auto fraction = parts[0].split("/");
-                    if (fraction.length == 2)
-                    {
-                        try
-                        {
-                            testsFailed = fraction[0].to!int;
-                            testsRun = fraction[1].to!int;
-                        }
-                        catch (Exception) {}
-                    }
-                }
-            }
-            else if (line.canFind("AssertError") || line.canFind("assertion failure")
-                    || line.canFind("Assertion failure"))
-            {
-                auto failure = parseTestFailure(line);
-                if (failure.type != JSONType.null_)
-                    testFailures ~= failure;
-            }
-        }
+		// If we got passed count but no failed, calculate totals
+		if(testsPassed > 0 && testsRun == 0)
+			testsRun = testsPassed;
+		if(testsFailed > 0 && testsRun > testsPassed)
+			testsPassed = testsRun - testsFailed;
 
-        // If we got passed count but no failed, calculate totals
-        if (testsPassed > 0 && testsRun == 0)
-            testsRun = testsPassed;
-        if (testsFailed > 0 && testsRun > testsPassed)
-            testsPassed = testsRun - testsFailed;
+		auto resp = JSONValue([
+			"success": JSONValue(success),
+			"phase": JSONValue(errors.data.length > 0 && !success ? "compilation" : "test"),
+			"tests_run": JSONValue(testsRun),
+			"tests_passed": JSONValue(testsPassed),
+			"tests_failed": JSONValue(testsFailed),
+			"compilation_errors": JSONValue(errors.data),
+			"compilation_warnings": JSONValue(warnings.data),
+			"test_failures": JSONValue(testFailures.data),
+			"output": JSONValue(fullOutput),
+		]);
 
-        auto resp = JSONValue([
-            "success": JSONValue(success),
-            "phase": JSONValue(errors.data.length > 0 && !success ? "compilation" : "test"),
-            "tests_run": JSONValue(testsRun),
-            "tests_passed": JSONValue(testsPassed),
-            "tests_failed": JSONValue(testsFailed),
-            "compilation_errors": JSONValue(errors.data),
-            "compilation_warnings": JSONValue(warnings.data),
-            "test_failures": JSONValue(testFailures.data),
-            "output": JSONValue(fullOutput),
-        ]);
+		return createTextResult(resp.toString());
+	}
 
-        return createTextResult(resp.toString());
-    }
-
-    /** Parse dmd/ldc2 diagnostic lines */
-    JSONValue parseDiagnostic(string line)
-    {
-        import std.regex : regex, matchFirst;
-
-        auto re = regex(`^(.+?)\((\d+)(?:,(\d+))?\):\s*(Error|Warning|Deprecation)\s*:\s*(.+)$`);
-        auto m = matchFirst(line, re);
-
-        if (m.empty)
-            return JSONValue(null);
-
-        auto entry = JSONValue(string[string].init);
-        entry["file"] = JSONValue(m[1].idup);
-        entry["line"] = JSONValue(m[2].to!int);
-        if (m[3].length > 0)
-            entry["column"] = JSONValue(m[3].to!int);
-        entry["severity"] = JSONValue(m[4].idup.toLower());
-        entry["message"] = JSONValue(m[5].idup);
-
-        return entry;
-    }
-
-    /**
+	/**
      * Parse assertion failure lines like:
      * core.exception.AssertError@source/file.d(42): assertion message
      */
-    JSONValue parseTestFailure(string line)
-    {
-        import std.regex : regex, matchFirst;
+	JSONValue parseTestFailure(string line)
+	{
+		import std.regex : regex, matchFirst;
 
-        auto re = regex(`AssertError@(.+?)\((\d+)\)(?::\s*(.*))?`);
-        auto m = matchFirst(line, re);
+		auto re = regex(`AssertError@(.+?)\((\d+)\)(?::\s*(.*))?`);
+		auto m = matchFirst(line, re);
 
-        if (m.empty)
-        {
-            // Try a more generic pattern
-            auto re2 = regex(`([Aa]ssertion [Ff]ailure|AssertError).*?(?:@(.+?)\((\d+)\))?(?::\s*(.*))?`);
-            auto m2 = matchFirst(line, re2);
-            if (m2.empty)
-                return JSONValue(null);
+		if(m.empty) {
+			// Try a more generic pattern
+			auto re2 = regex(
+					`([Aa]ssertion [Ff]ailure|AssertError).*?(?:@(.+?)\((\d+)\))?(?::\s*(.*))?`);
+			auto m2 = matchFirst(line, re2);
+			if(m2.empty)
+				return JSONValue(null);
 
-            auto entry = JSONValue(string[string].init);
-            if (m2[2].length > 0)
-                entry["file"] = JSONValue(m2[2].idup);
-            if (m2[3].length > 0)
-            {
-                try { entry["line"] = JSONValue(m2[3].to!int); }
-                catch (Exception) {}
-            }
-            string msg = m2[4].length > 0 ? m2[4].idup : line.strip();
-            entry["message"] = JSONValue(msg);
-            return entry;
-        }
+			auto entry = JSONValue(string[string].init);
+			if(m2[2].length > 0)
+				entry["file"] = JSONValue(m2[2].idup);
+			if(m2[3].length > 0) {
+				try {
+					entry["line"] = JSONValue(m2[3].to!int);
+				} catch(Exception) {
+				}
+			}
+			string msg = m2[4].length > 0 ? m2[4].idup : line.strip();
+			entry["message"] = JSONValue(msg);
+			return entry;
+		}
 
-        auto entry = JSONValue(string[string].init);
-        entry["file"] = JSONValue(m[1].idup);
-        entry["line"] = JSONValue(m[2].to!int);
-        string msg = m[3].length > 0 ? m[3].idup.strip() : "assertion failure";
-        entry["message"] = JSONValue(msg);
+		auto entry = JSONValue(string[string].init);
+		entry["file"] = JSONValue(m[1].idup);
+		entry["line"] = JSONValue(m[2].to!int);
+		string msg = m[3].length > 0 ? m[3].idup.strip() : "assertion failure";
+		entry["message"] = JSONValue(msg);
 
-        return entry;
-    }
+		return entry;
+	}
 }

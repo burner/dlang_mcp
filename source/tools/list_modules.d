@@ -27,24 +27,23 @@ import utils.ctags_parser : CtagsEntry, parseCtagsLine;
  * with their kinds and signatures. Uses D-Scanner's ctags mode for fast
  * symbol extraction.
  */
-class ListProjectModulesTool : BaseTool
-{
-    @property string name()
-    {
-        return "list_project_modules";
-    }
+class ListProjectModulesTool : BaseTool {
+	@property string name()
+	{
+		return "list_project_modules";
+	}
 
-    @property string description()
-    {
-        return "List all modules in a D project with a summary of their public API. "
-            ~ "For each module, shows the file path, module name, and public symbols "
-            ~ "(functions, classes, structs, enums, interfaces) with their kinds and signatures. "
-            ~ "Uses dscanner ctags for fast symbol extraction.";
-    }
+	@property string description()
+	{
+		return "List all modules in a D project with a summary of their public API. "
+			~ "For each module, shows the file path, module name, and public symbols "
+			~ "(functions, classes, structs, enums, interfaces) with their kinds and signatures. "
+			~ "Uses dscanner ctags for fast symbol extraction.";
+	}
 
-    @property JSONValue inputSchema()
-    {
-        return parseJSON(`{
+	@property JSONValue inputSchema()
+	{
+		return parseJSON(`{
             "type": "object",
             "properties": {
                 "project_path": {
@@ -59,222 +58,202 @@ class ListProjectModulesTool : BaseTool
                 }
             }
         }`);
-    }
+	}
 
-    ToolResult execute(JSONValue arguments)
-    {
-        try
-        {
-            string projectPath = ".";
-            if ("project_path" in arguments && arguments["project_path"].type == JSONType.string)
-            {
-                projectPath = arguments["project_path"].str;
-            }
+	ToolResult execute(JSONValue arguments)
+	{
+		try {
+			import std.path : absolutePath;
 
-            projectPath = absolutePath(projectPath);
+			string projectPath = ".";
+			if("project_path" in arguments && arguments["project_path"].type == JSONType.string) {
+				projectPath = arguments["project_path"].str;
+			}
 
-            bool includePrivate = false;
-            if ("include_private" in arguments && arguments["include_private"].type == JSONType.true_)
-            {
-                includePrivate = true;
-            }
+			projectPath = absolutePath(projectPath);
 
-            // Find source files
-            string[] sourceFiles = findSourceFiles(projectPath);
+			bool includePrivate = false;
+			if("include_private" in arguments && arguments["include_private"].type == JSONType
+					.true_) {
+				includePrivate = true;
+			}
 
-            if (sourceFiles.length == 0)
-            {
-                return createErrorResult("No D source files found in project: " ~ projectPath);
-            }
+			// Find source files
+			string[] sourceFiles = findSourceFiles(projectPath);
 
-            // Process each file
-            auto result = JSONValue(cast(JSONValue[]) []);
+			if(sourceFiles.length == 0) {
+				return createErrorResult("No D source files found in project: " ~ projectPath);
+			}
 
-            foreach (filePath; sourceFiles)
-            {
-                auto moduleInfo = processFile(filePath, projectPath, includePrivate);
-                if (moduleInfo.type != JSONType.null_)
-                    result.array ~= moduleInfo;
-            }
+			// Process each file
+			auto result = JSONValue(cast(JSONValue[])[]);
 
-            return createTextResult(result.toPrettyString());
-        }
-        catch (Exception e)
-        {
-            return createErrorResult("Error listing modules: " ~ e.msg);
-        }
-    }
+			foreach(filePath; sourceFiles) {
+				auto moduleInfo = processFile(filePath, projectPath, includePrivate);
+				if(moduleInfo.type != JSONType.null_)
+					result.array ~= moduleInfo;
+			}
+
+			return createTextResult(result.toPrettyString());
+		} catch(Exception e) {
+			return createErrorResult("Error listing modules: " ~ e.msg);
+		}
+	}
 
 private:
 
-    string[] findSourceFiles(string projectPath)
-    {
-        string[] files;
+	string[] findSourceFiles(string projectPath)
+	{
+		string[] files;
 
-        // Try to get source paths from dub.json
-        auto dubJsonPath = buildPath(projectPath, "dub.json");
-        string[] sourceDirs;
+		// Try to get source paths from dub.json
+		auto dubJsonPath = buildPath(projectPath, "dub.json");
+		string[] sourceDirs;
 
-        if (exists(dubJsonPath))
-        {
-            try
-            {
-                import std.file : readText;
+		if(exists(dubJsonPath)) {
+			try {
+				import std.file : readText;
 
-                auto dubJson = parseJSON(readText(dubJsonPath));
-                if ("importPaths" in dubJson && dubJson["importPaths"].type == JSONType.array)
-                {
-                    foreach (item; dubJson["importPaths"].array)
-                    {
-                        if (item.type == JSONType.string)
-                            sourceDirs ~= item.str;
-                    }
-                }
-                else if ("sourcePaths" in dubJson && dubJson["sourcePaths"].type == JSONType.array)
-                {
-                    foreach (item; dubJson["sourcePaths"].array)
-                    {
-                        if (item.type == JSONType.string)
-                            sourceDirs ~= item.str;
-                    }
-                }
-            }
-            catch (Exception)
-            {
-            }
-        }
+				auto dubJson = parseJSON(readText(dubJsonPath));
+				if("importPaths" in dubJson && dubJson["importPaths"].type == JSONType.array) {
+					foreach(item; dubJson["importPaths"].array) {
+						if(item.type == JSONType.string)
+							sourceDirs ~= item.str;
+					}
+				} else if("sourcePaths" in dubJson && dubJson["sourcePaths"].type == JSONType.array) {
+					foreach(item; dubJson["sourcePaths"].array) {
+						if(item.type == JSONType.string)
+							sourceDirs ~= item.str;
+					}
+				}
+			} catch(Exception) {
+			}
+		}
 
-        // Default directories
-        if (sourceDirs.length == 0)
-        {
-            sourceDirs = ["source", "src"];
-        }
+		// Default directories
+		if(sourceDirs.length == 0) {
+			sourceDirs = ["source", "src"];
+		}
 
-        foreach (dirName; sourceDirs)
-        {
-            auto fullPath = buildPath(projectPath, dirName);
-            if (!exists(fullPath))
-                continue;
+		foreach(dirName; sourceDirs) {
+			auto fullPath = buildPath(projectPath, dirName);
+			if(!exists(fullPath))
+				continue;
 
-            foreach (entry; dirEntries(fullPath, "*.d", SpanMode.depth))
-            {
-                files ~= entry.name;
-            }
-        }
+			foreach(entry; dirEntries(fullPath, "*.d", SpanMode.depth)) {
+				files ~= entry.name;
+			}
+		}
 
-        files.sort();
-        return files;
-    }
+		files.sort();
+		return files;
+	}
 
-    JSONValue processFile(string filePath, string projectPath, bool includePrivate)
-    {
-        auto relPath = relativePath(filePath, projectPath);
-        string moduleName = pathToModuleName(relPath);
+	JSONValue processFile(string filePath, string projectPath, bool includePrivate)
+	{
+		auto relPath = relativePath(filePath, projectPath);
+		string moduleName = pathToModuleName(relPath);
 
-        // Run dscanner --ctags on this file
-        auto ctagsResult = executeCommand(["dscanner", "--ctags", filePath]);
-        if (ctagsResult.status != 0)
-        {
-            // Still include the module, just without symbols
-            auto obj = JSONValue(cast(string[string]) null);
-            obj["file"] = relPath;
-            if (moduleName.length > 0)
-                obj["module"] = moduleName;
-            obj["symbols"] = JSONValue(cast(JSONValue[]) []);
-            return obj;
-        }
+		// Run dscanner --ctags on this file
+		auto ctagsResult = executeCommand(["dscanner", "--ctags", filePath]);
+		if(ctagsResult.status != 0) {
+			// Still include the module, just without symbols
+			auto obj = JSONValue(cast(string[string])null);
+			obj["file"] = relPath;
+			if(moduleName.length > 0)
+				obj["module"] = moduleName;
+			obj["symbols"] = JSONValue(cast(JSONValue[])[]);
+			return obj;
+		}
 
-        // Parse ctags output
-        CtagsEntry[] entries;
-        foreach (line; ctagsResult.output.lineSplitter)
-        {
-            auto stripped = line.strip();
-            if (stripped.length == 0 || stripped[0] == '!')
-                continue;
+		// Parse ctags output
+		CtagsEntry[] entries;
+		foreach(line; ctagsResult.output.lineSplitter) {
+			auto stripped = line.strip();
+			if(stripped.length == 0 || stripped[0] == '!')
+				continue;
 
-            auto entry = parseCtagsLine(stripped);
-            if (entry.symbol.length == 0)
-                continue;
+			auto entry = parseCtagsLine(stripped);
+			if(entry.symbol.length == 0)
+				continue;
 
-            // Filter by visibility
-            if (!includePrivate && (entry.access == "private" || entry.access == "protected"))
-                continue;
+			// Filter by visibility
+			if(!includePrivate && (entry.access == "private" || entry.access == "protected"))
+				continue;
 
-            entries ~= entry;
-        }
+			entries ~= entry;
+		}
 
-        // Build JSON output
-        auto obj = JSONValue(cast(string[string]) null);
-        obj["file"] = relPath;
-        if (moduleName.length > 0)
-            obj["module"] = moduleName;
+		// Build JSON output
+		auto obj = JSONValue(cast(string[string])null);
+		obj["file"] = relPath;
+		if(moduleName.length > 0)
+			obj["module"] = moduleName;
 
-        auto symbolArr = JSONValue(cast(JSONValue[]) []);
-        foreach (ref entry; entries)
-        {
-            auto symObj = JSONValue(cast(string[string]) null);
-            symObj["name"] = entry.symbol;
-            if (entry.kind.length > 0)
-                symObj["kind"] = kindToFullName(entry.kind);
-            if (entry.signature.length > 0)
-                symObj["signature"] = entry.signature;
-            if (entry.scopeName.length > 0)
-                symObj["scope"] = entry.scopeName;
-            if (entry.line > 0)
-                symObj["line"] = JSONValue(entry.line);
-            if (includePrivate && entry.access.length > 0)
-                symObj["access"] = entry.access;
-            symbolArr.array ~= symObj;
-        }
+		auto symbolArr = JSONValue(cast(JSONValue[])[]);
+		foreach(ref entry; entries) {
+			auto symObj = JSONValue(cast(string[string])null);
+			symObj["name"] = entry.symbol;
+			if(entry.kind.length > 0)
+				symObj["kind"] = kindToFullName(entry.kind);
+			if(entry.signature.length > 0)
+				symObj["signature"] = entry.signature;
+			if(entry.scopeName.length > 0)
+				symObj["scope"] = entry.scopeName;
+			if(entry.line > 0)
+				symObj["line"] = JSONValue(entry.line);
+			if(includePrivate && entry.access.length > 0)
+				symObj["access"] = entry.access;
+			symbolArr.array ~= symObj;
+		}
 
-        obj["symbols"] = symbolArr;
-        return obj;
-    }
+		obj["symbols"] = symbolArr;
+		return obj;
+	}
 
-    static string pathToModuleName(string path)
-    {
-        string p = path.replace("\\", "/");
+	static string pathToModuleName(string path)
+	{
+		string p = path.replace("\\", "/");
 
-        if (p.startsWith("source/"))
-            p = p[7 .. $];
-        else if (p.startsWith("src/"))
-            p = p[4 .. $];
+		if(p.startsWith("source/"))
+			p = p[7 .. $];
+		else if(p.startsWith("src/"))
+			p = p[4 .. $];
 
-        if (!p.endsWith(".d"))
-            return "";
+		if(!p.endsWith(".d"))
+			return "";
 
-        p = p[0 .. $ - 2];
+		p = p[0 .. $ - 2];
 
-        if (p.endsWith("/package"))
-            p = p[0 .. $ - 8];
+		if(p.endsWith("/package"))
+			p = p[0 .. $ - 8];
 
-        return p.replace("/", ".");
-    }
+		return p.replace("/", ".");
+	}
 
-    static string kindToFullName(string kind)
-    {
-        switch (kind)
-        {
-        case "f":
-            return "function";
-        case "c":
-            return "class";
-        case "s":
-            return "struct";
-        case "g":
-            return "enum";
-        case "i":
-            return "interface";
-        case "v":
-            return "variable";
-        case "e":
-            return "enum_member";
-        case "m":
-            return "member";
-        case "p":
-            return "property";
-        default:
-            return kind;
-        }
-    }
+	static string kindToFullName(string kind)
+	{
+		switch(kind) {
+		case "f":
+			return "function";
+		case "c":
+			return "class";
+		case "s":
+			return "struct";
+		case "g":
+			return "enum";
+		case "i":
+			return "interface";
+		case "v":
+			return "variable";
+		case "e":
+			return "enum_member";
+		case "m":
+			return "member";
+		case "p":
+			return "property";
+		default:
+			return kind;
+		}
+	}
 }

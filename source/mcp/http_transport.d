@@ -38,7 +38,7 @@ struct SSESession {
  */
 final class SSETransport : Transport {
 	private string _sessionId;
-	private string _pendingMessage;
+	private string[] _messageQueue;
 	private bool _connected = true;
 	private Mutex _mutex;
 	private Condition _messageReady;
@@ -83,7 +83,7 @@ final class SSETransport : Transport {
 	void receiveMessage(string message)
 	{
 		synchronized(_mutex) {
-			_pendingMessage = message;
+			_messageQueue ~= message;
 			_messageReady.notify();
 		}
 	}
@@ -125,14 +125,14 @@ final class SSETransport : Transport {
 	string readMessage()
 	{
 		synchronized(_mutex) {
-			while(_pendingMessage is null && _connected) {
+			while(_messageQueue.length == 0 && _connected) {
 				_messageReady.wait();
 			}
 			if(!_connected)
 				throw new EOFException();
 
-			auto msg = _pendingMessage;
-			_pendingMessage = null;
+			auto msg = _messageQueue[0];
+			_messageQueue = _messageQueue[1 .. $];
 			return msg;
 		}
 	}

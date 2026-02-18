@@ -7,10 +7,19 @@
 module tools.search_base;
 
 import std.json : JSONValue, parseJSON, JSONType;
+import std.file : exists;
 import tools.base : BaseTool;
 import storage.connection : DBConnection;
 import storage.search : HybridSearch;
 import mcp.types : ToolResult;
+
+/** Exception thrown when the search database is not available. */
+class SearchDBNotFoundException : Exception {
+	this(string msg) pure nothrow @safe
+	{
+		super(msg);
+	}
+}
 
 /**
  * Abstract base class for tools that perform searches against the local database.
@@ -44,6 +53,11 @@ abstract class SearchTool : BaseTool {
 	private void ensureConnection()
 	{
 		if(_conn is null) {
+			if(!exists("data/search.db")) {
+				throw new SearchDBNotFoundException(
+					"Search database not available. "
+					~ "Run the server with --init-db to create it, then --ingest to populate it.");
+			}
 			_conn = new DBConnection("data/search.db");
 			_search = new HybridSearch(_conn);
 		}

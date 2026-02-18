@@ -96,6 +96,8 @@ class IngestionPipeline {
 			long pkgId;
 			string srcDir;
 			string[] dFiles;
+			string[] compilerImportPaths;
+			string compilerName;
 			PackageMetadata metadata;
 
 			if(isSpecialPackage(packageName)) {
@@ -105,6 +107,8 @@ class IngestionPipeline {
 				}
 
 				srcDir = getSpecialPackagePath(packageName, compilerPaths);
+				compilerImportPaths = [compilerPaths.importPath];
+				compilerName = compilerPaths.compilerName;
 				writeln("  Using compiler path: ", srcDir, " (", compilerPaths.compilerName, ")");
 
 				if(!exists(srcDir) || !isDir(srcDir)) {
@@ -113,11 +117,8 @@ class IngestionPipeline {
 
 				metadata.name = packageName;
 				metadata.version_ = "builtin";
-				metadata.description = packageName == "phobos" 
-					? "D standard library (phobos/std)"
-					: packageName == "core"
-						? "D runtime (druntime/core)"
-						: "D etc utilities";
+				metadata.description = packageName == "phobos" ? "D standard library (phobos/std)" : packageName == "core"
+					? "D runtime (druntime/core)" : "D etc utilities";
 				metadata.tags = [packageName, "builtin"];
 
 				pkgId = crud.insertPackage(metadata);
@@ -144,7 +145,8 @@ class IngestionPipeline {
 			int typesCount = 0;
 			int examplesCount = 0;
 
-			auto parseResult = parseProject(srcDir);
+			auto parseResult = compilerImportPaths.length > 0 ? parseProject(srcDir,
+					dFiles, compilerImportPaths, compilerName) : parseProject(srcDir);
 			if(parseResult.error.length == 0 && parseResult.modules.length > 0) {
 				foreach(ref mod; parseResult.modules) {
 					auto stored = storeModuleFromParsed(mod, packageName, pkgId);
@@ -172,7 +174,8 @@ class IngestionPipeline {
 
 			if(conn.hasVectorSupport()) {
 				writeln("  Storing embeddings...");
-				string pkgText = metadata.name ~ " " ~ metadata.description ~ " " ~ metadata.tags.join(" ");
+				string pkgText = metadata.name ~ " " ~ metadata.description ~ " " ~ metadata.tags.join(
+						" ");
 				auto pkgEmbedding = embedder.embed(pkgText);
 				crud.storePackageEmbedding(pkgId, pkgEmbedding);
 			}
@@ -216,10 +219,8 @@ class IngestionPipeline {
 				long funcId = crud.insertFunction(modId, funcDoc);
 				result.functions++;
 
-				crud.updateFtsFunction(funcId, pkgId, funcDoc.name,
-						funcDoc.fullyQualifiedName, funcDoc.signature,
-						funcDoc.docComment, funcDoc.parameters,
-						funcDoc.examples, packageName);
+				crud.updateFtsFunction(funcId, pkgId, funcDoc.name, funcDoc.fullyQualifiedName, funcDoc.signature,
+						funcDoc.docComment, funcDoc.parameters, funcDoc.examples, packageName);
 
 				if(conn.hasVectorSupport() && funcId > 0) {
 					string funcText = funcDoc.name ~ " " ~ funcDoc.signature
@@ -235,13 +236,11 @@ class IngestionPipeline {
 				long typeId = crud.insertType(modId, typeDoc);
 				result.types++;
 
-				crud.updateFtsType(typeId, pkgId, typeDoc.name,
-						typeDoc.fullyQualifiedName, typeDoc.kind,
-						typeDoc.docComment, packageName);
+				crud.updateFtsType(typeId, pkgId, typeDoc.name, typeDoc.fullyQualifiedName,
+						typeDoc.kind, typeDoc.docComment, packageName);
 
 				if(conn.hasVectorSupport() && typeId > 0) {
-					string typeText = typeDoc.name ~ " " ~ typeDoc.kind
-						~ " " ~ typeDoc.docComment;
+					string typeText = typeDoc.name ~ " " ~ typeDoc.kind ~ " " ~ typeDoc.docComment;
 					auto typeEmbedding = embedder.embed(typeText);
 					crud.storeTypeEmbedding(typeId, typeEmbedding);
 				}
@@ -253,10 +252,8 @@ class IngestionPipeline {
 					long methId = crud.insertFunction(modId, methDoc);
 					result.functions++;
 
-					crud.updateFtsFunction(methId, pkgId, methDoc.name,
-							methDoc.fullyQualifiedName, methDoc.signature,
-							methDoc.docComment, methDoc.parameters,
-							methDoc.examples, packageName);
+					crud.updateFtsFunction(methId, pkgId, methDoc.name, methDoc.fullyQualifiedName, methDoc.signature,
+							methDoc.docComment, methDoc.parameters, methDoc.examples, packageName);
 
 					if(conn.hasVectorSupport() && methId > 0) {
 						string methText = methDoc.name ~ " " ~ methDoc.signature

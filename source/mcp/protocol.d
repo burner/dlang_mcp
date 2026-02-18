@@ -164,12 +164,11 @@ JsonRpcResponse createInternalErrorResponse(JSONValue id, string message)
 }
 
 /**
- * Creates an empty JSON object, used as a placeholder for null/empty values.
+ * Creates a JSON null value for use as an empty result.
  *
- * Returns: A `JSONValue` containing an empty object `{}`.
+ * Returns: A `JSONValue` containing JSON null.
  */
 JSONValue nullJSON()
 {
-	JSONValue[string] empty;
-	return JSONValue(empty);
+	return JSONValue(null);
 }

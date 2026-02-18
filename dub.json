@@ -3,7 +3,7 @@
 	"description": "MCP server for D language tools with semantic package search",
 	"authors": ["burner"],
 	"copyright": "Copyright © 2026, burner",
-	"license": "MIT",
+	"license": "BSL-1.0",
 	"targetType": "executable",
 	"targetName": "dlang_mcp",
 	"targetPath": "bin",

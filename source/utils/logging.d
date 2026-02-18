@@ -59,9 +59,9 @@ LogLevel getLogLevel() @trusted nothrow
  */
 void logError(string message)
 {
-	if (_minLevel <= LogLevel.error)
-	{
+	if(_minLevel <= LogLevel.error) {
 		import std.format : format;
+
 		stderr.writeln(format("[ERROR] %s", message));
 	}
 }
@@ -76,9 +76,9 @@ void logError(string message)
  */
 void logInfo(string message)
 {
-	if (_minLevel <= LogLevel.info)
-	{
+	if(_minLevel <= LogLevel.info) {
 		import std.format : format;
+
 		stderr.writeln(format("[INFO] %s", message));
 	}
 }
@@ -94,11 +94,10 @@ void logInfo(string message)
  */
 void logDebug(string message)
 {
-	debug
-	{
-		if (_minLevel <= LogLevel.debug_)
-		{
+	debug {
+		if(_minLevel <= LogLevel.debug_) {
 			import std.format : format;
+
 			stderr.writeln(format("[DEBUG] %s", message));
 		}
 	}
