@@ -116,6 +116,51 @@ Add to `~/.config/opencode/opencode.json`:
 }
 ```
 
+### GitHub Copilot (VS Code)
+
+Add to `.vscode/mcp.json` in your workspace:
+
+```json
+{
+  "servers": {
+    "dlang-mcp": {
+      "type": "stdio",
+      "command": "/path/to/dlang_mcp/bin/dlang_mcp"
+    }
+  }
+}
+```
+
+### GitHub Copilot CLI
+
+Add to `~/.config/github-copilot/github-copilot-cli/mcp.json`:
+
+```json
+{
+  "servers": {
+    "dlang-mcp": {
+      "type": "stdio",
+      "command": "/path/to/dlang_mcp/bin/dlang_mcp"
+    }
+  }
+}
+```
+
+### OpenAI Codex CLI
+
+Add to `~/.codex/config.json`:
+
+```json
+{
+  "mcpServers": {
+    "dlang-mcp": {
+      "type": "stdio",
+      "command": "/path/to/dlang_mcp/bin/dlang_mcp"
+    }
+  }
+}
+```
+
 ### Zed
 
 Add to `~/.config/zed/settings.json`:
@@ -132,80 +177,6 @@ Add to `~/.config/zed/settings.json`:
     }
   }
 }
-```
-
-## Security
-
-### Authentication
-
-When running in HTTP mode, you can require bearer token authentication:
-
-```bash
-./bin/dlang_mcp --http --auth-token=my-secret-token
-```
-
-Clients must include the `Authorization: Bearer my-secret-token` header on all requests. The `/health` endpoint is excluded from authentication.
-
-### Path Sandboxing
-
-By default, all file and directory access is restricted to the current working directory. You can change the allowed root:
-
-```bash
-./bin/dlang_mcp --sandbox-root=/home/user/projects
-```
-
-### HTTPS / TLS
-
-The MCP server listens on plain HTTP. For production deployments, place a reverse proxy in front to handle TLS termination.
-
-**nginx example:**
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name mcp.example.com;
-
-    ssl_certificate     /etc/letsencrypt/live/mcp.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/mcp.example.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 86400;  # SSE connections are long-lived
-    }
-}
-```
-
-**Caddy example (automatic TLS):**
-
-```
-mcp.example.com {
-    reverse_proxy 127.0.0.1:3000
-}
-```
-
-### CORS
-
-When serving browser-based MCP clients, set the allowed origin:
-
-```bash
-./bin/dlang_mcp --http --cors-origin=http://localhost:8080
-```
-
-### Rate Limiting
-
-HTTP mode includes built-in per-IP rate limiting (100 requests per 60-second window). Requests exceeding the limit receive HTTP 429.
-
-### Process Timeout
-
-All subprocess executions (compiler, dscanner, dfmt, etc.) are limited to a configurable timeout:
-
-```bash
-./bin/dlang_mcp --timeout=60  # 60 seconds (default: 30)
 ```
 
 ## Command Line Reference
@@ -361,4 +332,4 @@ rm -rf data/cache/sources/<package-name>
 
 ## License
 
-AGPL-3.0-or-later — see [LICENSE](LICENSE) for the full text.
+BOOST — see [LICENSE](LICENSE) for the full text.
