@@ -15,7 +15,8 @@
 	"dependencies": {
 		"d2sqlite3": "~>1.0.0",
 		"vibe-d:http": "~>0.10.3",
-		"bindbc-onnxruntime": "~>1.2.0"
+		"bindbc-onnxruntime": "~>1.2.0",
+		"libdparse": "~>0.25.1"
 	},
 	"targetType": "executable",
 	"configurations": [
