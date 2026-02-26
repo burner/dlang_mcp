@@ -34,6 +34,7 @@ import tools.run_tests : RunTestsTool;
 import tools.run_project : RunProjectTool;
 import tools.fetch_package : FetchPackageTool;
 import tools.upgrade_deps : UpgradeDependenciesTool;
+import tools.coverage_analysis : CoverageAnalysisTool;
 import storage.connection : DBConnection;
 import storage.schema : SchemaManager;
 import storage.crud : CRUDOperations;
@@ -568,6 +569,7 @@ private MCPServer createConfiguredServer()
 	server.registerTool(new RunProjectTool());
 	server.registerTool(new FetchPackageTool());
 	server.registerTool(new UpgradeDependenciesTool());
+	server.registerTool(new CoverageAnalysisTool());
 
 	// Always register search tools so they appear in tools/list.
 	// They return a helpful error at call time if the DB is missing.
