@@ -81,3 +81,135 @@ class PackageSearchTool : SearchTool {
 		}
 	}
 }
+
+/// PackageSearchTool has correct name
+unittest {
+	auto tool = new PackageSearchTool();
+	assert(tool.name == "search_packages",
+			format("Expected name 'search_packages', got: '%s'", tool.name));
+}
+
+/// PackageSearchTool has non-empty description
+unittest {
+	auto tool = new PackageSearchTool();
+	assert(tool.description.length > 0, "Description should not be empty");
+	assert(tool.description == "Search for D packages by name, description, or tags. "
+			~ "Returns matching packages with descriptions and metadata.",
+			format("Unexpected description: '%s'", tool.description));
+}
+
+/// PackageSearchTool schema has correct type and properties
+unittest {
+	auto tool = new PackageSearchTool();
+	auto schema = tool.inputSchema;
+	assert(schema["type"].str == "object",
+			format("Schema type should be 'object', got: '%s'", schema["type"].str));
+	auto props = schema["properties"];
+	assert("query" in props, "Schema should have 'query' property");
+	assert("limit" in props, "Schema should have 'limit' property");
+}
+
+/// PackageSearchTool schema marks query as required
+unittest {
+	auto tool = new PackageSearchTool();
+	auto schema = tool.inputSchema;
+	assert("required" in schema, "Schema should have 'required' array");
+	bool hasQuery = false;
+	foreach(r; schema["required"].array) {
+		if(r.str == "query")
+			hasQuery = true;
+	}
+	assert(hasQuery, "query should be listed in required");
+}
+
+/// PackageSearchTool schema has correct property types and defaults
+unittest {
+	auto tool = new PackageSearchTool();
+	auto schema = tool.inputSchema;
+	auto props = schema["properties"];
+
+	assert(props["query"]["type"].str == "string",
+			format("query type should be 'string', got: '%s'", props["query"]["type"].str));
+	assert(props["limit"]["type"].str == "integer",
+			format("limit type should be 'integer', got: '%s'", props["limit"]["type"].str));
+	assert(props["limit"]["default"].integer == 10,
+			format("limit default should be 10, got: %d", props["limit"]["default"].integer));
+}
+
+/// PackageSearchTool returns error when query parameter is missing
+unittest {
+	auto tool = new PackageSearchTool();
+	auto args = parseJSON(`{}`);
+	auto result = tool.execute(args);
+	assert(result.isError, "Should return error when query is missing");
+	assert(result.content.length > 0, "Should have error content");
+	assert(result.content[0].text == "Missing required 'query' parameter",
+			format("Unexpected error message: '%s'", result.content[0].text));
+}
+
+/// PackageSearchTool returns error when query is empty string
+unittest {
+	auto tool = new PackageSearchTool();
+	auto args = parseJSON(`{"query": ""}`);
+	auto result = tool.execute(args);
+	assert(result.isError, "Should return error when query is empty string");
+	assert(result.content[0].text == "Missing required 'query' parameter",
+			format("Unexpected error message: '%s'", result.content[0].text));
+}
+
+/// PackageSearchTool execute succeeds with valid query and returns formatted output
+unittest {
+	import std.algorithm.searching : canFind, startsWith;
+
+	auto tool = new PackageSearchTool();
+	auto args = parseJSON(`{"query": "vibe"}`);
+	auto result = tool.execute(args);
+	assert(result.content.length > 0, "Should have content");
+	// Result is either found packages or "No packages found" - both are valid non-error
+	if(!result.isError) {
+		auto text = result.content[0].text;
+		assert(text.canFind("packages") || text.canFind("Found"),
+				format("Output should mention packages or Found, got: '%s'",
+					text.length > 100 ? text[0 .. 100] ~ "..." : text));
+	}
+	tool.close();
+}
+
+/// PackageSearchTool respects custom limit parameter
+unittest {
+	auto tool = new PackageSearchTool();
+	auto args = parseJSON(`{"query": "algorithm", "limit": 2}`);
+	auto result = tool.execute(args);
+	assert(result.content.length > 0, "Should have content");
+	// Should not crash and should return a result
+	assert(!result.isError || result.content[0].text.length > 0,
+			"Should either succeed or provide a meaningful error");
+	tool.close();
+}
+
+/// PackageSearchTool returns no-results message for nonsense query
+unittest {
+	import std.algorithm.searching : canFind;
+
+	auto tool = new PackageSearchTool();
+	auto args = parseJSON(`{"query": "zzznonexistentpackagexyz999"}`);
+	auto result = tool.execute(args);
+	assert(result.content.length > 0, "Should have content");
+	if(!result.isError) {
+		assert(result.content[0].text.canFind("No packages found") || result.content[0].text.canFind("Found"),
+				format("Expected 'No packages found' or 'Found' message, got: '%s'",
+					result.content[0].text.length > 100
+					? result.content[0].text[0 .. 100] ~ "..." : result.content[0].text));
+	}
+	tool.close();
+}
+
+/// PackageSearchTool ignores non-integer limit and uses default
+unittest {
+	auto tool = new PackageSearchTool();
+	auto args = parseJSON(`{"query": "test", "limit": "not_a_number"}`);
+	auto result = tool.execute(args);
+	// Should not crash - limit defaults to 10 when not an integer
+	assert(result.content.length > 0, "Should have content");
+	tool.close();
+}

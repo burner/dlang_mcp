@@ -200,3 +200,242 @@ struct SearchResult {
 	string moduleName; /// The module containing the matched entity.
 	float rank; /// The relevance score, higher is better.
 }
+
+// -- Unit Tests --
+
+/// Test PackageMetadata.toJSON with all fields populated
+unittest {
+	import std.format : format;
+
+	PackageMetadata pkg;
+	pkg.name = "test-pkg";
+	pkg.version_ = "1.0.0";
+	pkg.description = "A test package";
+	pkg.repository = "https://github.com/test/pkg";
+	pkg.homepage = "https://test-pkg.org";
+	pkg.license = "MIT";
+	pkg.authors = ["Alice", "Bob"];
+	pkg.tags = ["testing", "utils"];
+
+	auto j = pkg.toJSON();
+
+	assert(j["name"].str == "test-pkg", format("expected 'test-pkg', got '%s'", j["name"].str));
+	assert(j["version"].str == "1.0.0", format("expected '1.0.0', got '%s'", j["version"].str));
+	assert(j["description"].str == "A test package",
+			format("expected 'A test package', got '%s'", j["description"].str));
+	assert(j["repository"].str == "https://github.com/test/pkg",
+			format("expected repository URL, got '%s'", j["repository"].str));
+	assert(j["homepage"].str == "https://test-pkg.org",
+			format("expected homepage URL, got '%s'", j["homepage"].str));
+	assert(j["license"].str == "MIT", format("expected 'MIT', got '%s'", j["license"].str));
+
+	auto authorsArr = j["authors"].array;
+	assert(authorsArr.length == 2, format("expected 2 authors, got %d", authorsArr.length));
+	assert(authorsArr[0].str == "Alice", format("expected 'Alice', got '%s'", authorsArr[0].str));
+	assert(authorsArr[1].str == "Bob", format("expected 'Bob', got '%s'", authorsArr[1].str));
+
+	auto tagsArr = j["tags"].array;
+	assert(tagsArr.length == 2, format("expected 2 tags, got %d", tagsArr.length));
+	assert(tagsArr[0].str == "testing", format("expected 'testing', got '%s'", tagsArr[0].str));
+	assert(tagsArr[1].str == "utils", format("expected 'utils', got '%s'", tagsArr[1].str));
+}
+
+/// Test PackageMetadata.toJSON omits empty optional fields
+unittest {
+	PackageMetadata pkg;
+	pkg.name = "minimal";
+	pkg.version_ = "0.1.0";
+
+	auto j = pkg.toJSON();
+
+	assert(j["name"].str == "minimal");
+	assert(j["version"].str == "0.1.0");
+	assert("description" !in j.object, "description should be absent when empty");
+	assert("repository" !in j.object, "repository should be absent when empty");
+	assert("homepage" !in j.object, "homepage should be absent when empty");
+	assert("license" !in j.object, "license should be absent when empty");
+	assert("authors" !in j.object, "authors should be absent when empty");
+	assert("tags" !in j.object, "tags should be absent when empty");
+}
+
+/// Test PackageMetadata round-trip: toJSON -> fromJSON preserves all fields
+unittest {
+	import std.format : format;
+
+	PackageMetadata original;
+	original.name = "round-trip";
+	original.version_ = "2.3.4";
+	original.description = "Round-trip test";
+	original.repository = "https://github.com/test/roundtrip";
+	original.homepage = "https://roundtrip.dev";
+	original.license = "BSL-1.0";
+	original.authors = ["Charlie"];
+	original.tags = ["serialization"];
+
+	auto j = original.toJSON();
+	auto restored = PackageMetadata.fromJSON(j);
+
+	assert(restored.name == original.name,
+			format("name: expected '%s', got '%s'", original.name, restored.name));
+	assert(restored.version_ == original.version_,
+			format("version: expected '%s', got '%s'", original.version_, restored.version_));
+	assert(restored.description == original.description,
+			format("description: expected '%s', got '%s'",
+				original.description, restored.description));
+	assert(restored.repository == original.repository,
+			format("repository: expected '%s', got '%s'", original.repository, restored.repository));
+	assert(restored.homepage == original.homepage,
+			format("homepage: expected '%s', got '%s'", original.homepage, restored.homepage));
+	assert(restored.license == original.license,
+			format("license: expected '%s', got '%s'", original.license, restored.license));
+	assert(restored.authors == original.authors,
+			format("authors: expected %s, got %s", original.authors, restored.authors));
+	assert(restored.tags == original.tags, format("tags: expected %s, got %s",
+			original.tags, restored.tags));
+}
+
+/// Test PackageMetadata.fromJSON with nested "info" object (DUB API format)
+unittest {
+	import std.format : format;
+
+	auto json = parseJSON(`{
+		"info": {
+			"name": "nested-pkg",
+			"version": "3.0.0",
+			"description": "Nested info test",
+			"repository": "https://github.com/test/nested",
+			"homepage": "https://nested.dev",
+			"license": "Apache-2.0",
+			"authors": ["Dave"],
+			"tags": ["nested"]
+		}
+	}`);
+
+	auto pkg = PackageMetadata.fromJSON(json);
+
+	assert(pkg.name == "nested-pkg", format("expected 'nested-pkg', got '%s'", pkg.name));
+	assert(pkg.version_ == "3.0.0", format("expected '3.0.0', got '%s'", pkg.version_));
+	assert(pkg.description == "Nested info test",
+			format("expected 'Nested info test', got '%s'", pkg.description));
+	assert(pkg.repository == "https://github.com/test/nested",
+			format("expected repository, got '%s'", pkg.repository));
+	assert(pkg.homepage == "https://nested.dev",
+			format("expected homepage, got '%s'", pkg.homepage));
+	assert(pkg.license == "Apache-2.0", format("expected 'Apache-2.0', got '%s'", pkg.license));
+	assert(pkg.authors == ["Dave"], format("expected ['Dave'], got %s", pkg.authors));
+	assert(pkg.tags == ["nested"], format("expected ['nested'], got %s", pkg.tags));
+}
+
+/// Test PackageMetadata.fromJSON with version at top level overrides info version
+unittest {
+	import std.format : format;
+
+	auto json = parseJSON(`{
+		"version": "1.0.0",
+		"info": {
+			"name": "override-test",
+			"version": "2.0.0"
+		}
+	}`);
+
+	auto pkg = PackageMetadata.fromJSON(json);
+	// Top-level version takes precedence
+	assert(pkg.version_ == "1.0.0", format("expected '1.0.0', got '%s'", pkg.version_));
+}
+
+/// Test PackageMetadata.fromJSON with version as integer in info
+unittest {
+	import std.format : format;
+
+	auto json = parseJSON(`{
+		"name": "int-version",
+		"version": 42
+	}`);
+
+	auto pkg = PackageMetadata.fromJSON(json);
+	assert(pkg.version_ == "42", format("expected '42', got '%s'", pkg.version_));
+}
+
+/// Test PackageMetadata.fromJSON with version as string in info (no top-level version)
+unittest {
+	import std.format : format;
+
+	auto json = parseJSON(`{
+		"info": {
+			"name": "info-version",
+			"version": "5.0.0"
+		}
+	}`);
+
+	auto pkg = PackageMetadata.fromJSON(json);
+	assert(pkg.version_ == "5.0.0", format("expected '5.0.0', got '%s'", pkg.version_));
+}
+
+/// Test PackageMetadata.fromJSON with empty JSON object
+unittest {
+	auto json = parseJSON(`{}`);
+	auto pkg = PackageMetadata.fromJSON(json);
+
+	assert(pkg.name == "", "name should be empty for empty JSON");
+	assert(pkg.version_ == "", "version should be empty for empty JSON");
+	assert(pkg.description == "", "description should be empty for empty JSON");
+	assert(pkg.repository == "", "repository should be empty for empty JSON");
+	assert(pkg.homepage == "", "homepage should be empty for empty JSON");
+	assert(pkg.license == "", "license should be empty for empty JSON");
+	assert(pkg.authors.length == 0, "authors should be empty for empty JSON");
+	assert(pkg.tags.length == 0, "tags should be empty for empty JSON");
+}
+
+/// Test PackageMetadata.fromJSON ignores wrong-typed fields
+unittest {
+	auto json = parseJSON(`{
+		"name": 123,
+		"description": false,
+		"license": [],
+		"authors": "not-an-array",
+		"tags": "not-an-array"
+	}`);
+
+	auto pkg = PackageMetadata.fromJSON(json);
+	// All fields should remain default because types don't match
+	assert(pkg.name == "", "name should be empty when JSON type is wrong");
+	assert(pkg.description == "", "description should be empty when JSON type is wrong");
+	assert(pkg.license == "", "license should be empty when JSON type is wrong");
+	assert(pkg.authors.length == 0, "authors should be empty when JSON type is wrong");
+	assert(pkg.tags.length == 0, "tags should be empty when JSON type is wrong");
+}
+
+/// Test PackageMetadata round-trip with minimal fields (only required)
+unittest {
+	PackageMetadata original;
+	original.name = "minimal-rt";
+	original.version_ = "0.0.1";
+
+	auto j = original.toJSON();
+	auto restored = PackageMetadata.fromJSON(j);
+
+	assert(restored.name == "minimal-rt");
+	assert(restored.version_ == "0.0.1");
+	assert(restored.description == "");
+	assert(restored.authors.length == 0);
+	assert(restored.tags.length == 0);
+}
+
+/// Test PackageMetadata.toJSON with partial optional fields
+unittest {
+	PackageMetadata pkg;
+	pkg.name = "partial";
+	pkg.version_ = "1.0.0";
+	pkg.description = "Has description";
+	pkg.license = "MIT";
+	// No repository, homepage, authors, or tags
+
+	auto j = pkg.toJSON();
+
+	assert("description" in j.object, "description should be present");
+	assert("license" in j.object, "license should be present");
+	assert("repository" !in j.object, "repository should be absent");
+	assert("homepage" !in j.object, "homepage should be absent");
+	assert("authors" !in j.object, "authors should be absent");
+	assert("tags" !in j.object, "tags should be absent");
+}

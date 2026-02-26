@@ -268,3 +268,40 @@ unittest
 	assert(ranges[2].name == "");
 	assert(ranges[2].parentName == "");
 }
+
+unittest {
+	// Interface with default method implementations
+	enum src = q{
+interface Serializable
+{
+    void serialize()
+    {
+        // default implementation
+    }
+
+    int priority()
+    {
+        return 0;
+    }
+}
+};
+	auto ranges = extractFunctionRanges(src);
+	assert(ranges.length == 2, "Expected 2 methods in interface");
+
+	assert(ranges[0].name == "serialize");
+	assert(ranges[0].parentName == "Serializable");
+	assert(ranges[0].kind == "function");
+	assert(ranges[0].endLine >= ranges[0].startLine);
+
+	assert(ranges[1].name == "priority");
+	assert(ranges[1].parentName == "Serializable");
+	assert(ranges[1].kind == "function");
+	assert(ranges[1].endLine >= ranges[1].startLine);
+}
+
+unittest {
+	// Empty source produces no ranges (exercises getEndLine returning 0 path)
+	enum src = q{};
+	auto ranges = extractFunctionRanges(src);
+	assert(ranges.length == 0, "Expected 0 ranges for empty source");
+}

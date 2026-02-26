@@ -326,3 +326,55 @@ unittest {
 	assert(cov.lines[0].executionCount == 123456);
 	assert(cov.lines[0].isCovered);
 }
+
+/// Backslash path handling in inferSourceFileName.
+unittest {
+	assert(inferSourceFileName("dir\\subdir\\source-foo.lst") == "source/foo.d");
+	assert(inferSourceFileName("dir\\source-tools-base.lst") == "source/tools/base.d");
+	assert(inferSourceFileName("C:\\builds\\app.lst") == "app.d");
+}
+
+/// ConvException branch: non-numeric left side of `|` yields executionCount 0.
+unittest {
+	string lst = "garbage|source line\n";
+	auto cov = parseLstContent(lst);
+	assert(cov.lines.length == 1);
+	assert(cov.lines[0].isExecutable);
+	assert(!cov.lines[0].isCovered);
+	assert(cov.lines[0].executionCount == 0);
+	assert(cov.lines[0].sourceText == "source line");
+}
+
+/// \r\n and bare \r line endings are handled the same as \n.
+unittest {
+	string lstLf = "       |module foo;\n      5|void bar() {\n      5|}\n";
+	auto covLf = parseLstContent(lstLf);
+
+	// \r\n line endings.
+	string lstCrLf = "       |module foo;\r\n      5|void bar() {\r\n      5|}\r\n";
+	auto covCrLf = parseLstContent(lstCrLf);
+
+	assert(covCrLf.lines.length == covLf.lines.length,
+			"Expected " ~ to!string(covLf.lines.length) ~ " lines, got " ~ to!string(
+				covCrLf.lines.length));
+	foreach(i; 0 .. covLf.lines.length) {
+		assert(covCrLf.lines[i].sourceText == covLf.lines[i].sourceText);
+		assert(covCrLf.lines[i].executionCount == covLf.lines[i].executionCount);
+		assert(covCrLf.lines[i].isExecutable == covLf.lines[i].isExecutable);
+		assert(covCrLf.lines[i].isCovered == covLf.lines[i].isCovered);
+	}
+
+	// Bare \r line endings.
+	string lstCr = "       |module foo;\r      5|void bar() {\r      5|}\r";
+	auto covCr = parseLstContent(lstCr);
+
+	assert(covCr.lines.length == covLf.lines.length,
+			"Expected " ~ to!string(
+				covLf.lines.length) ~ " lines, got " ~ to!string(covCr.lines.length));
+	foreach(i; 0 .. covLf.lines.length) {
+		assert(covCr.lines[i].sourceText == covLf.lines[i].sourceText);
+		assert(covCr.lines[i].executionCount == covLf.lines[i].executionCount);
+		assert(covCr.lines[i].isExecutable == covLf.lines[i].isExecutable);
+		assert(covCr.lines[i].isCovered == covLf.lines[i].isCovered);
+	}
+}

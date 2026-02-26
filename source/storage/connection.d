@@ -242,3 +242,235 @@ struct Transaction {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Unit tests
+// ---------------------------------------------------------------------------
+
+/// Test basic connection with :memory: database
+unittest {
+	import std.format : format;
+
+	auto conn = new DBConnection(":memory:", "");
+	assert(conn !is null, "Connection should be created for :memory: database");
+
+	// hasVectorSupport should be false since we passed empty extension path
+	assert(!conn.hasVectorSupport(),
+			"In-memory DB should not have vector support with empty extension path");
+
+	conn.close();
+}
+
+/// Test database property accessor
+unittest {
+	auto conn = new DBConnection(":memory:", "");
+	scope(exit)
+		conn.close();
+
+	auto db = conn.database;
+	// Verify we can use the raw database handle
+	db.execute("SELECT 1");
+}
+
+/// Test execute with valid SQL
+unittest {
+	auto conn = new DBConnection(":memory:", "");
+	scope(exit)
+		conn.close();
+
+	conn.execute("CREATE TABLE test_exec (id INTEGER PRIMARY KEY, name TEXT)");
+	conn.execute("INSERT INTO test_exec (name) VALUES ('hello')");
+
+	auto stmt = conn.prepare("SELECT COUNT(*) FROM test_exec");
+	auto result = stmt.execute();
+	foreach(row; result) {
+		assert(row[0].as!int == 1, "Should have inserted 1 row");
+	}
+}
+
+/// Test execute error handling — invalid SQL triggers SqliteException
+unittest {
+	import std.format : format;
+	import d2sqlite3 : SqliteException;
+
+	auto conn = new DBConnection(":memory:", "");
+	scope(exit)
+		conn.close();
+
+	bool caughtException = false;
+	try {
+		conn.execute("INVALID SQL STATEMENT HERE !!!");
+	} catch(SqliteException e) {
+		caughtException = true;
+	}
+	assert(caughtException, "execute() should throw SqliteException for invalid SQL");
+}
+
+/// Test prepare error handling — invalid SQL triggers SqliteException
+unittest {
+	import d2sqlite3 : SqliteException;
+
+	auto conn = new DBConnection(":memory:", "");
+	scope(exit)
+		conn.close();
+
+	bool caughtException = false;
+	try {
+		conn.prepare("SELECT * FROM nonexistent_table_xyz");
+	} catch(SqliteException e) {
+		caughtException = true;
+	}
+	assert(caughtException, "prepare() should throw SqliteException for invalid SQL");
+}
+
+/// Test prepare with parameters
+unittest {
+	import std.format : format;
+
+	auto conn = new DBConnection(":memory:", "");
+	scope(exit)
+		conn.close();
+
+	conn.execute("CREATE TABLE test_params (id INTEGER PRIMARY KEY, value TEXT)");
+
+	auto insertStmt = conn.prepare("INSERT INTO test_params (value) VALUES (?)");
+	insertStmt.bind(1, "test_value");
+	insertStmt.execute();
+
+	auto selectStmt = conn.prepare("SELECT value FROM test_params WHERE id = ?");
+	selectStmt.bind(1, 1);
+	auto result = selectStmt.execute();
+	foreach(row; result) {
+		assert(row[0].as!string == "test_value",
+				format("Expected 'test_value', got '%s'", row[0].as!string));
+	}
+}
+
+/// Test beginTransaction, commit lifecycle
+unittest {
+	auto conn = new DBConnection(":memory:", "");
+	scope(exit)
+		conn.close();
+
+	conn.execute("CREATE TABLE test_txn (id INTEGER PRIMARY KEY, val INTEGER)");
+
+	conn.beginTransaction();
+	conn.execute("INSERT INTO test_txn (val) VALUES (42)");
+	conn.commit();
+
+	// Verify data persisted after commit
+	auto stmt = conn.prepare("SELECT val FROM test_txn");
+	auto result = stmt.execute();
+	bool found = false;
+	foreach(row; result) {
+		assert(row[0].as!int == 42, "Committed value should be 42");
+		found = true;
+	}
+	assert(found, "Should find the committed row");
+}
+
+/// Test beginTransaction, rollback lifecycle
+unittest {
+	auto conn = new DBConnection(":memory:", "");
+	scope(exit)
+		conn.close();
+
+	conn.execute("CREATE TABLE test_rb (id INTEGER PRIMARY KEY, val INTEGER)");
+
+	conn.beginTransaction();
+	conn.execute("INSERT INTO test_rb (val) VALUES (99)");
+	conn.rollback();
+
+	// Verify data was rolled back
+	auto stmt = conn.prepare("SELECT COUNT(*) FROM test_rb");
+	auto result = stmt.execute();
+	foreach(row; result) {
+		assert(row[0].as!int == 0, "Rolled-back insert should leave table empty");
+	}
+}
+
+/// Test lastInsertRowid
+unittest {
+	import std.format : format;
+
+	auto conn = new DBConnection(":memory:", "");
+	scope(exit)
+		conn.close();
+
+	conn.execute("CREATE TABLE test_rowid (id INTEGER PRIMARY KEY, name TEXT)");
+	conn.execute("INSERT INTO test_rowid (name) VALUES ('first')");
+
+	auto rowid = conn.lastInsertRowid();
+	assert(rowid == 1, format("Expected rowid 1, got %d", rowid));
+
+	conn.execute("INSERT INTO test_rowid (name) VALUES ('second')");
+	auto rowid2 = conn.lastInsertRowid();
+	assert(rowid2 == 2, format("Expected rowid 2, got %d", rowid2));
+}
+
+/// Test totalChanges
+unittest {
+	import std.format : format;
+
+	auto conn = new DBConnection(":memory:", "");
+	scope(exit)
+		conn.close();
+
+	conn.execute("CREATE TABLE test_changes (id INTEGER PRIMARY KEY, val INTEGER)");
+	conn.execute("INSERT INTO test_changes (val) VALUES (1)");
+	conn.execute("INSERT INTO test_changes (val) VALUES (2)");
+	conn.execute("INSERT INTO test_changes (val) VALUES (3)");
+
+	auto changes = conn.totalChanges();
+	// totalChanges counts all row modifications since connection opened,
+	// including the CREATE TABLE (0 rows) + 3 INSERTs = at least 3
+	assert(changes >= 3, format("Expected at least 3 total changes, got %d", changes));
+}
+
+/// Test Transaction struct — commit path
+unittest {
+	auto conn = new DBConnection(":memory:", "");
+	scope(exit)
+		conn.close();
+
+	conn.execute("CREATE TABLE test_txn_struct (id INTEGER PRIMARY KEY, val TEXT)");
+
+	{
+		auto txn = Transaction(conn);
+		conn.execute("INSERT INTO test_txn_struct (val) VALUES ('committed')");
+		txn.commit();
+	}
+
+	// Data should persist after committed Transaction goes out of scope
+	auto stmt = conn.prepare("SELECT val FROM test_txn_struct");
+	auto result = stmt.execute();
+	bool found = false;
+	foreach(row; result) {
+		assert(row[0].as!string == "committed", "Transaction commit should persist data");
+		found = true;
+	}
+	assert(found, "Should find the committed row");
+}
+
+/// Test Transaction struct — automatic rollback on scope exit (no commit)
+unittest {
+	auto conn = new DBConnection(":memory:", "");
+	scope(exit)
+		conn.close();
+
+	conn.execute("CREATE TABLE test_txn_auto_rb (id INTEGER PRIMARY KEY, val TEXT)");
+
+	{
+		auto txn = Transaction(conn);
+		conn.execute("INSERT INTO test_txn_auto_rb (val) VALUES ('should_vanish')");
+		// txn goes out of scope without commit → auto rollback
+	}
+
+	// Data should be rolled back
+	auto stmt = conn.prepare("SELECT COUNT(*) FROM test_txn_auto_rb");
+	auto result = stmt.execute();
+	foreach(row; result) {
+		assert(row[0].as!int == 0,
+				"Uncommitted Transaction should auto-rollback, leaving table empty");
+	}
+}

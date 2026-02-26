@@ -245,3 +245,351 @@ private:
 		return entry;
 	}
 }
+
+// -- Unit Tests --
+
+/// RunTestsTool has correct name
+unittest {
+	auto tool = new RunTestsTool();
+	assert(tool.name == "run_tests", "Expected name 'run_tests', got: " ~ tool.name);
+}
+
+/// RunTestsTool has non-empty description
+unittest {
+	auto tool = new RunTestsTool();
+	assert(tool.description.length > 0, "Description should not be empty");
+}
+
+/// RunTestsTool schema has expected properties
+unittest {
+	import std.format : format;
+
+	auto tool = new RunTestsTool();
+	auto schema = tool.inputSchema;
+	assert(schema["type"].str == "object", "Schema type should be 'object'");
+	auto props = schema["properties"];
+	assert("project_path" in props, "Schema should have project_path");
+	assert("compiler" in props, "Schema should have compiler");
+	assert("configuration" in props, "Schema should have configuration");
+	assert("verbose" in props, "Schema should have verbose");
+	assert("filter" in props, "Schema should have filter");
+}
+
+/// parseTestFailure with standard AssertError format
+unittest {
+	import std.format : format;
+
+	auto tool = new RunTestsTool();
+	auto result = tool.parseTestFailure(
+			"core.exception.AssertError@source/file.d(42): assertion message");
+	assert(result.type != JSONType.null_, "Should parse standard AssertError");
+	assert(result["file"].str == "source/file.d",
+			"Expected file 'source/file.d', got: " ~ result["file"].str);
+	assert(result["line"].integer == 42,
+			format!"Expected line 42, got: %s"(result["line"].integer));
+	assert(result["message"].str == "assertion message",
+			"Expected 'assertion message', got: " ~ result["message"].str);
+}
+
+/// parseTestFailure with no message after AssertError
+unittest {
+	auto tool = new RunTestsTool();
+	auto result = tool.parseTestFailure("core.exception.AssertError@source/foo.d(10)");
+	assert(result.type != JSONType.null_, "Should parse AssertError without message");
+	assert(result["file"].str == "source/foo.d");
+	assert(result["line"].integer == 10);
+	assert(result["message"].str == "assertion failure",
+			"Expected default message 'assertion failure', got: " ~ result["message"].str);
+}
+
+/// parseTestFailure with assertion failure text (generic pattern)
+unittest {
+	auto tool = new RunTestsTool();
+	auto result = tool.parseTestFailure("Assertion failure in some test");
+	assert(result.type != JSONType.null_, "Should parse generic assertion failure");
+	assert("message" in result, "Should have message field");
+}
+
+/// parseTestFailure with assertion failure and file location
+unittest {
+	auto tool = new RunTestsTool();
+	auto result = tool.parseTestFailure("assertion failure@source/bar.d(99): expected 5 got 3");
+	// This should match the generic pattern since it doesn't start with AssertError@
+	assert(result.type != JSONType.null_, "Should parse assertion failure with location");
+}
+
+/// parseTestFailure with non-matching line returns null
+unittest {
+	auto tool = new RunTestsTool();
+	auto result = tool.parseTestFailure("Building dlang_mcp ~master...");
+	assert(result.type == JSONType.null_, "Non-assertion line should return null");
+}
+
+/// parseTestFailure with empty string returns null
+unittest {
+	auto tool = new RunTestsTool();
+	auto result = tool.parseTestFailure("");
+	assert(result.type == JSONType.null_, "Empty string should return null");
+}
+
+/// parseTestFailure with AssertError containing path with spaces
+unittest {
+	auto tool = new RunTestsTool();
+	auto result = tool.parseTestFailure(
+			"core.exception.AssertError@source/my module.d(7): bad value");
+	assert(result.type != JSONType.null_, "Should parse path with spaces");
+	assert(result["file"].str == "source/my module.d");
+	assert(result["line"].integer == 7);
+	assert(result["message"].str == "bad value");
+}
+
+/// formatTestResult with successful test run (all modules passed)
+unittest {
+	import std.format : format;
+	import utils.process : ProcessResult;
+
+	auto tool = new RunTestsTool();
+	ProcessResult pr;
+	pr.status = 0;
+	pr.output = "Running tests...\n42 modules passed unittests";
+	pr.stderrOutput = "";
+
+	auto result = tool.formatTestResult(pr);
+	assert(!result.isError, "Successful test run should not be an error");
+	assert(result.content.length > 0, "Should have content");
+
+	auto json = parseJSON(result.content[0].text);
+	assert(json["success"].type == JSONType.true_, "success should be true");
+	assert(json["tests_passed"].integer == 42,
+			format("Expected 42 tests passed, got: %s", json["tests_passed"].integer));
+	assert(json["tests_run"].integer == 42,
+			format("Expected 42 tests run, got: %s", json["tests_run"].integer));
+	assert(json["tests_failed"].integer == 0,
+			format("Expected 0 tests failed, got: %s", json["tests_failed"].integer));
+}
+
+/// formatTestResult with failed test run (modules FAILED)
+unittest {
+	import std.format : format;
+	import utils.process : ProcessResult;
+
+	auto tool = new RunTestsTool();
+	ProcessResult pr;
+	pr.status = 1;
+	pr.output = "2/10 modules FAILED unittests";
+	pr.stderrOutput = "";
+
+	auto result = tool.formatTestResult(pr);
+	assert(!result.isError, "formatTestResult wraps in text result, not error result");
+
+	auto json = parseJSON(result.content[0].text);
+	assert(json["success"].type == JSONType.false_, "success should be false for failed tests");
+	assert(json["tests_failed"].integer == 2,
+			format("Expected 2 failed, got: %s", json["tests_failed"].integer));
+	assert(json["tests_run"].integer == 10, format("Expected 10 run, got: %s",
+			json["tests_run"].integer));
+	// testsPassed should be calculated: 10 - 2 = 8
+	assert(json["tests_passed"].integer == 8,
+			format("Expected 8 passed, got: %s", json["tests_passed"].integer));
+}
+
+/// formatTestResult with compilation errors
+unittest {
+	import std.format : format;
+	import utils.process : ProcessResult;
+
+	auto tool = new RunTestsTool();
+	ProcessResult pr;
+	pr.status = 1;
+	pr.output = "";
+	pr.stderrOutput = "source/app.d(10): Error: undefined identifier 'foo'";
+
+	auto result = tool.formatTestResult(pr);
+	auto json = parseJSON(result.content[0].text);
+	assert(json["success"].type == JSONType.false_,
+			"success should be false for compilation failure");
+	assert(json["phase"].str == "compilation",
+			"Phase should be 'compilation' when there are errors, got: " ~ json["phase"].str);
+	assert(json["compilation_errors"].array.length == 1,
+			format("Expected 1 compilation error, got: %s", json["compilation_errors"].array.length));
+}
+
+/// formatTestResult with compilation warnings
+unittest {
+	import std.format : format;
+	import utils.process : ProcessResult;
+
+	auto tool = new RunTestsTool();
+	ProcessResult pr;
+	pr.status = 0;
+	pr.output = "source/app.d(5,3): Warning: implicit conversion\n10 modules passed unittests";
+	pr.stderrOutput = "";
+
+	auto result = tool.formatTestResult(pr);
+	auto json = parseJSON(result.content[0].text);
+	assert(json["success"].type == JSONType.true_);
+	assert(json["compilation_warnings"].array.length == 1,
+			format("Expected 1 warning, got: %s", json["compilation_warnings"].array.length));
+}
+
+/// formatTestResult with AssertError in output
+unittest {
+	import std.format : format;
+	import utils.process : ProcessResult;
+
+	auto tool = new RunTestsTool();
+	ProcessResult pr;
+	pr.status = 1;
+	pr.output
+		= "core.exception.AssertError@source/test.d(42): expected 5 got 3\n1/5 modules FAILED unittests";
+	pr.stderrOutput = "";
+
+	auto result = tool.formatTestResult(pr);
+	auto json = parseJSON(result.content[0].text);
+	assert(json["test_failures"].array.length == 1,
+			format("Expected 1 test failure, got: %s", json["test_failures"].array.length));
+	auto failure = json["test_failures"].array[0];
+	assert(failure["file"].str == "source/test.d");
+	assert(failure["line"].integer == 42);
+}
+
+/// formatTestResult with empty output (no tests)
+unittest {
+	import utils.process : ProcessResult;
+
+	auto tool = new RunTestsTool();
+	ProcessResult pr;
+	pr.status = 0;
+	pr.output = "";
+	pr.stderrOutput = "";
+
+	auto result = tool.formatTestResult(pr);
+	auto json = parseJSON(result.content[0].text);
+	assert(json["success"].type == JSONType.true_);
+	assert(json["tests_run"].integer == 0);
+	assert(json["tests_passed"].integer == 0);
+	assert(json["tests_failed"].integer == 0);
+}
+
+/// formatTestResult phase detection (test phase when no compilation errors)
+unittest {
+	import utils.process : ProcessResult;
+
+	auto tool = new RunTestsTool();
+	ProcessResult pr;
+	pr.status = 1;
+	pr.output = "1/5 modules FAILED unittests";
+	pr.stderrOutput = "";
+
+	auto result = tool.formatTestResult(pr);
+	auto json = parseJSON(result.content[0].text);
+	assert(json["phase"].str == "test",
+			"Phase should be 'test' when no compilation errors, got: " ~ json["phase"].str);
+}
+
+/// formatTestResult with multiple AssertErrors
+unittest {
+	import std.format : format;
+	import utils.process : ProcessResult;
+
+	auto tool = new RunTestsTool();
+	ProcessResult pr;
+	pr.status = 1;
+	pr.output = "core.exception.AssertError@source/a.d(10): first failure\n"
+		~ "core.exception.AssertError@source/b.d(20): second failure\n"
+		~ "2/5 modules FAILED unittests";
+	pr.stderrOutput = "";
+
+	auto result = tool.formatTestResult(pr);
+	auto json = parseJSON(result.content[0].text);
+	assert(json["test_failures"].array.length == 2,
+			format("Expected 2 test failures, got: %s", json["test_failures"].array.length));
+}
+
+/// formatTestResult with Running line triggers test phase detection
+unittest {
+	import utils.process : ProcessResult;
+
+	auto tool = new RunTestsTool();
+	ProcessResult pr;
+	pr.status = 0;
+	pr.output = "Running ./test-runner\n5 modules passed unittests";
+	pr.stderrOutput = "";
+
+	auto result = tool.formatTestResult(pr);
+	auto json = parseJSON(result.content[0].text);
+	assert(json["tests_passed"].integer == 5);
+}
+
+/// formatTestResult preserves full output in response
+unittest {
+	import std.algorithm.searching : canFind;
+	import utils.process : ProcessResult;
+
+	auto tool = new RunTestsTool();
+	ProcessResult pr;
+	pr.status = 0;
+	pr.output = "some output here";
+	pr.stderrOutput = "some stderr";
+
+	auto result = tool.formatTestResult(pr);
+	auto json = parseJSON(result.content[0].text);
+	assert(json["output"].str.canFind("some output here"), "Output should contain stdout");
+	assert(json["output"].str.canFind("some stderr"), "Output should contain stderr");
+}
+
+/// formatTestResult with mixed compilation errors and test failures
+unittest {
+	import std.format : format;
+	import utils.process : ProcessResult;
+
+	auto tool = new RunTestsTool();
+	ProcessResult pr;
+	pr.status = 1;
+	pr.output = "source/app.d(5): Error: syntax error\n"
+		~ "core.exception.AssertError@source/test.d(15): bad assert";
+	pr.stderrOutput = "";
+
+	auto result = tool.formatTestResult(pr);
+	auto json = parseJSON(result.content[0].text);
+	assert(json["compilation_errors"].array.length == 1,
+			format("Expected 1 compilation error, got: %s", json["compilation_errors"].array.length));
+	assert(json["test_failures"].array.length == 1,
+			format("Expected 1 test failure, got: %s", json["test_failures"].array.length));
+}
+
+/// formatTestResult only passed count sets testsRun to same value
+unittest {
+	import std.format : format;
+	import utils.process : ProcessResult;
+
+	auto tool = new RunTestsTool();
+	ProcessResult pr;
+	pr.status = 0;
+	pr.output = "15 modules passed unittests";
+	pr.stderrOutput = "";
+
+	auto result = tool.formatTestResult(pr);
+	auto json = parseJSON(result.content[0].text);
+	// When only passed count is available, testsRun should equal testsPassed
+	assert(json["tests_run"].integer == 15,
+			format("Expected tests_run=15, got: %s", json["tests_run"].integer));
+	assert(json["tests_passed"].integer == 15,
+			format("Expected tests_passed=15, got: %s", json["tests_passed"].integer));
+}
+
+/// parseTestFailure with AssertError@ containing colon but no message text
+unittest {
+	auto tool = new RunTestsTool();
+	auto result = tool.parseTestFailure("core.exception.AssertError@source/x.d(1):");
+	assert(result.type != JSONType.null_, "Should parse AssertError with trailing colon");
+	assert(result["file"].str == "source/x.d");
+	assert(result["line"].integer == 1);
+}
+
+/// parseTestFailure with generic 'assertion failure' (lowercase)
+unittest {
+	auto tool = new RunTestsTool();
+	auto result = tool.parseTestFailure("assertion failure in module foo");
+	assert(result.type != JSONType.null_, "Should match lowercase 'assertion failure'");
+}
