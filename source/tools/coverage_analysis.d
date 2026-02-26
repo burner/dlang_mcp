@@ -60,9 +60,13 @@ class CoverageAnalysisTool : BaseTool {
 		if(!hasFile && !hasDir)
 			return createErrorResult("Either 'file_path' or 'directory' must be provided.");
 
-		int minUncovered = 1;
+		if(hasFile && hasDir)
+			return createErrorResult("Provide either 'file_path' or 'directory', not both.");
+
+		int minUncoveredRaw = 1;
 		if("min_uncovered" in arguments && arguments["min_uncovered"].type == JSONType.integer)
-			minUncovered = arguments["min_uncovered"].get!int;
+			minUncoveredRaw = arguments["min_uncovered"].get!int;
+		size_t minUncovered = minUncoveredRaw > 0 ? cast(size_t)minUncoveredRaw : 0;
 
 		string[] lstFiles;
 
@@ -112,7 +116,7 @@ class CoverageAnalysisTool : BaseTool {
 		return createTextResult(resp.toPrettyString());
 	}
 
-	private JSONValue analyzeFile(string lstPath, int minUncovered)
+	private JSONValue analyzeFile(string lstPath, size_t minUncovered)
 	{
 		import std.file : readText;
 		import std.algorithm : sort;
@@ -224,7 +228,7 @@ unittest {
 	// Test: nonexistent file returns error
 	auto tool = new CoverageAnalysisTool();
 	auto result = tool.execute(JSONValue([
-			"file_path": JSONValue("/tmp/nonexistent_12345.lst")
+		"file_path": JSONValue("/tmp/nonexistent_12345.lst")
 	]));
 	assert(result.isError);
 }
