@@ -290,3 +290,303 @@ class MCPServer {
 		}
 	}
 }
+
+// ===========================================================================
+// Unit tests
+// ===========================================================================
+
+version(unittest)  : import test_helpers : MockTool, FailingTool;
+import std.algorithm.searching : canFind;
+import std.json : JSONType;
+import mcp.types : JsonRpcErrorCode;
+
+private MCPServer createTestServer()
+{
+	auto server = new MCPServer();
+	server.registerTool(new MockTool());
+	server.registerTool(new FailingTool());
+	return server;
+}
+
+private void initTestServer(MCPServer server)
+{
+	server.handleInitialize(JSONValue(1), JSONValue(cast(string[string])null));
+}
+
+private JsonRpcRequest makeTestRequest(string method, JSONValue id,
+		JSONValue params = JSONValue.init)
+{
+	JsonRpcRequest req;
+	req.jsonrpc = "2.0";
+	req.method = method;
+	req.id = id;
+	req.params = params;
+	req.isNotification = false;
+	return req;
+}
+
+private JsonRpcRequest makeTestNotification(string method)
+{
+	JsonRpcRequest req;
+	req.jsonrpc = "2.0";
+	req.method = method;
+	req.id = JSONValue(null);
+	req.isNotification = true;
+	return req;
+}
+
+// --- Initialization Lifecycle ---
+
+/// tools/list before initialization returns InvalidParams error
+unittest {
+	auto server = createTestServer();
+	auto resp = server.handleToolsList(JSONValue(1));
+	assert(resp.error.type != JSONType.null_, "Should return error before init");
+	assert(resp.error["code"].integer == JsonRpcErrorCode.InvalidParams,
+			"Should be InvalidParams error");
+}
+
+/// tools/call before initialization returns InvalidParams error
+unittest {
+	auto server = createTestServer();
+	auto params = parseJSON(`{"name":"test_tool","arguments":{"input":"hi"}}`);
+	auto resp = server.handleToolsCall(JSONValue(1), params);
+	assert(resp.error.type != JSONType.null_, "Should return error before init");
+	assert(resp.error["code"].integer == JsonRpcErrorCode.InvalidParams,
+			"Should be InvalidParams error");
+}
+
+/// initialize succeeds and returns a result
+unittest {
+	auto server = createTestServer();
+	auto resp = server.handleInitialize(JSONValue(1), JSONValue(cast(string[string])null));
+	assert(resp.error.type == JSONType.null_, "Initialize should not return error");
+	assert(resp.result.type != JSONType.null_, "Initialize should return result");
+}
+
+/// initialize response has correct structure
+unittest {
+	auto server = createTestServer();
+	auto resp = server.handleInitialize(JSONValue(1), JSONValue(cast(string[string])null));
+	auto result = resp.result;
+
+	assert(result["protocolVersion"].str == "2024-11-05", "Protocol version should be '2024-11-05'");
+	assert("capabilities" in result, "Should have capabilities");
+	assert("tools" in result["capabilities"], "Capabilities should have tools");
+	assert("serverInfo" in result, "Should have serverInfo");
+	assert(result["serverInfo"]["name"].str.length > 0, "Server name should not be empty");
+}
+
+/// double initialize succeeds
+unittest {
+	auto server = createTestServer();
+	auto resp1 = server.handleInitialize(JSONValue(1), JSONValue(cast(string[string])null));
+	auto resp2 = server.handleInitialize(JSONValue(2), JSONValue(cast(string[string])null));
+	assert(resp2.error.type == JSONType.null_, "Second initialize should also succeed");
+}
+
+/// tools/list after initialization succeeds
+unittest {
+	auto server = createTestServer();
+	initTestServer(server);
+	auto resp = server.handleToolsList(JSONValue(1));
+	assert(resp.error.type == JSONType.null_, "Should not return error after init");
+	auto tools = resp.result["tools"].array;
+	assert(tools.length >= 2, "Should have at least 2 registered tools");
+}
+
+// --- Request Dispatch ---
+
+/// dispatch initialize
+unittest {
+	auto server = createTestServer();
+	auto req = makeTestRequest("initialize", JSONValue(1), JSONValue(cast(string[string])null));
+	auto resp = server.handleRequest(req);
+	assert(resp.error.type == JSONType.null_, "Initialize dispatch should succeed");
+	assert("protocolVersion" in resp.result, "Should have protocolVersion in result");
+}
+
+/// dispatch tools/list
+unittest {
+	auto server = createTestServer();
+	initTestServer(server);
+	auto req = makeTestRequest("tools/list", JSONValue(2));
+	auto resp = server.handleRequest(req);
+	assert(resp.error.type == JSONType.null_, "tools/list dispatch should succeed");
+	assert("tools" in resp.result, "Should have tools in result");
+}
+
+/// dispatch tools/call
+unittest {
+	auto server = createTestServer();
+	initTestServer(server);
+	auto params = parseJSON(`{"name":"test_tool","arguments":{"input":"hello"}}`);
+	auto req = makeTestRequest("tools/call", JSONValue(3), params);
+	auto resp = server.handleRequest(req);
+	assert(resp.error.type == JSONType.null_, "tools/call dispatch should succeed");
+}
+
+/// dispatch ping
+unittest {
+	auto server = createTestServer();
+	auto req = makeTestRequest("ping", JSONValue(4));
+	auto resp = server.handleRequest(req);
+	assert(resp.error.type == JSONType.null_, "ping should succeed");
+	assert(resp.result.type == JSONType.object, "Ping result should be an object");
+}
+
+/// dispatch resources/list
+unittest {
+	auto server = createTestServer();
+	auto req = makeTestRequest("resources/list", JSONValue(5));
+	auto resp = server.handleRequest(req);
+	assert(resp.error.type == JSONType.null_, "resources/list should succeed");
+	assert("resources" in resp.result, "Should have resources key");
+	assert(resp.result["resources"].array.length == 0, "Resources should be empty");
+}
+
+/// dispatch prompts/list
+unittest {
+	auto server = createTestServer();
+	auto req = makeTestRequest("prompts/list", JSONValue(6));
+	auto resp = server.handleRequest(req);
+	assert(resp.error.type == JSONType.null_, "prompts/list should succeed");
+	assert("prompts" in resp.result, "Should have prompts key");
+	assert(resp.result["prompts"].array.length == 0, "Prompts should be empty");
+}
+
+/// dispatch unknown method returns MethodNotFound
+unittest {
+	auto server = createTestServer();
+	auto req = makeTestRequest("nonexistent/method", JSONValue(7));
+	auto resp = server.handleRequest(req);
+	assert(resp.error.type != JSONType.null_, "Unknown method should return error");
+	assert(resp.error["code"].integer == JsonRpcErrorCode.MethodNotFound,
+			"Should be MethodNotFound error (-32601)");
+}
+
+// --- Notification Handling ---
+
+/// notification has isNotification flag
+unittest {
+	auto req = parseRequest(`{"jsonrpc":"2.0","method":"notifications/initialized"}`);
+	assert(req.isNotification, "Notification should have isNotification == true");
+}
+
+/// notifications/initialized parses correctly
+unittest {
+	auto req = parseRequest(`{"jsonrpc":"2.0","method":"notifications/initialized"}`);
+	assert(req.isNotification, "notifications/initialized should be a notification");
+	assert(req.method == "notifications/initialized", "Method should match");
+}
+
+/// notifications/cancelled parses correctly
+unittest {
+	auto req = parseRequest(`{"jsonrpc":"2.0","method":"notifications/cancelled"}`);
+	assert(req.isNotification, "notifications/cancelled should be a notification");
+	assert(req.method == "notifications/cancelled", "Method should match");
+}
+
+/// unknown notification still parses as notification
+unittest {
+	auto req = parseRequest(`{"jsonrpc":"2.0","method":"notifications/unknown"}`);
+	assert(req.isNotification, "Unknown notification should still be a notification");
+}
+
+// --- Tool Invocation ---
+
+/// tools/call succeeds with valid input
+unittest {
+	auto server = createTestServer();
+	initTestServer(server);
+	auto params = parseJSON(`{"name":"test_tool","arguments":{"input":"world"}}`);
+	auto resp = server.handleToolsCall(JSONValue(1), params);
+	assert(resp.error.type == JSONType.null_, "Successful tool call should not have error");
+	auto resultJson = resp.result;
+	assert("content" in resultJson, "Tool result should have 'content'");
+	auto content = resultJson["content"].array;
+	assert(content.length > 0, "Should have content");
+	assert(content[0]["text"].str.canFind("echo: world"), "Tool should echo back 'world'");
+}
+
+/// tools/call with missing name returns InvalidParams
+unittest {
+	auto server = createTestServer();
+	initTestServer(server);
+	auto params = parseJSON(`{"arguments":{"input":"test"}}`);
+	auto resp = server.handleToolsCall(JSONValue(1), params);
+	assert(resp.error.type != JSONType.null_, "Missing name should return error");
+	assert(resp.error["code"].integer == JsonRpcErrorCode.InvalidParams,
+			"Should be InvalidParams error");
+}
+
+/// tools/call with unknown tool returns error
+unittest {
+	auto server = createTestServer();
+	initTestServer(server);
+	auto params = parseJSON(`{"name":"nonexistent_tool","arguments":{}}`);
+	auto resp = server.handleToolsCall(JSONValue(1), params);
+	assert(resp.error.type != JSONType.null_, "Unknown tool should return error");
+	assert(resp.error["message"].str.canFind("Unknown tool"), "Error should mention 'Unknown tool'");
+}
+
+/// tools/call with missing arguments provides empty object
+unittest {
+	auto server = createTestServer();
+	initTestServer(server);
+	auto params = parseJSON(`{"name":"test_tool"}`);
+	auto resp = server.handleToolsCall(JSONValue(1), params);
+	assert(resp.error.type == JSONType.null_,
+			"Missing arguments should not crash - server provides empty {}");
+	auto content = resp.result["content"].array;
+	assert(content[0]["text"].str.canFind("no input"),
+			"Tool should handle missing input gracefully");
+}
+
+/// tools/call with throwing tool returns isError: true (not JSON-RPC error)
+unittest {
+	auto server = createTestServer();
+	initTestServer(server);
+	auto params = parseJSON(`{"name":"failing_tool","arguments":{}}`);
+	auto resp = server.handleToolsCall(JSONValue(1), params);
+	assert(resp.error.type == JSONType.null_, "Tool failure should NOT produce JSON-RPC error");
+	assert(resp.result["isError"].type == JSONType.true_, "Tool result should have isError: true");
+}
+
+/// tools/call with throwing tool includes error message in content
+unittest {
+	auto server = createTestServer();
+	initTestServer(server);
+	auto params = parseJSON(`{"name":"failing_tool","arguments":{}}`);
+	auto resp = server.handleToolsCall(JSONValue(1), params);
+	auto content = resp.result["content"].array;
+	assert(content.length > 0, "Should have error content");
+	assert(content[0]["text"].str.canFind("Intentional test failure"),
+			"Error content should contain the exception message");
+}
+
+// --- Tools List Response Structure ---
+
+/// tools/list contains all registered tools
+unittest {
+	auto server = createTestServer();
+	initTestServer(server);
+	auto resp = server.handleToolsList(JSONValue(1));
+	auto tools = resp.result["tools"].array;
+	assert(tools.length == 2, "Should have exactly 2 registered tools (test_tool and failing_tool)");
+}
+
+/// tools/list tool entries have correct structure
+unittest {
+	auto server = createTestServer();
+	initTestServer(server);
+	auto resp = server.handleToolsList(JSONValue(1));
+	auto tools = resp.result["tools"].array;
+	foreach(tool; tools) {
+		assert("name" in tool, "Each tool should have 'name'");
+		assert("description" in tool, "Each tool should have 'description'");
+		assert("inputSchema" in tool, "Each tool should have 'inputSchema'");
+		assert(tool["name"].str.length > 0, "Tool name should not be empty");
+		assert(tool["description"].str.length > 0, "Tool description should not be empty");
+	}
+}

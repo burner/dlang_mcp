@@ -43,13 +43,10 @@ struct JsonRpcRequest {
 		req.jsonrpc = json["jsonrpc"].str;
 		req.method = json["method"].str;
 
-		if("id" in json)
-		{
+		if("id" in json) {
 			req.id = json["id"];
 			req.isNotification = false;
-		}
-		else
-		{
+		} else {
 			req.id = JSONValue(null);
 			req.isNotification = true;
 		}
@@ -227,4 +224,72 @@ struct ToolDefinition {
 		json["inputSchema"] = inputSchema;
 		return json;
 	}
+}
+
+// -- Unit Tests --
+
+/// Deserialize a JsonRpcRequest from JSON
+unittest {
+	import std.json : parseJSON;
+
+	auto json = parseJSON(`{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"test"}}`);
+	auto req = JsonRpcRequest.fromJSON(json);
+	assert(req.jsonrpc == "2.0", "jsonrpc should be '2.0'");
+	assert(req.method == "tools/call", "method should be 'tools/call'");
+	assert(req.id.integer == 5, "id should be 5");
+	assert(!req.isNotification, "Should not be a notification");
+	assert(req.params["name"].str == "test", "params.name should be 'test'");
+}
+
+/// Serialize Content to JSON
+unittest {
+	auto c = Content("text", "hello");
+	auto json = c.toJSON();
+	assert(json["type"].str == "text", "Content type should be 'text'");
+	assert(json["text"].str == "hello", "Content text should be 'hello'");
+}
+
+/// Serialize ToolResult to JSON with isError=true
+unittest {
+	auto result = ToolResult([Content("text", "error msg")], true);
+	auto json = result.toJSON();
+	assert(json["isError"].type == JSONType.true_, "isError should be true");
+	assert(json["content"].array.length == 1, "Should have 1 content block");
+}
+
+/// Serialize ToolResult to JSON with isError=false
+unittest {
+	auto result = ToolResult([Content("text", "ok")], false);
+	auto json = result.toJSON();
+	assert(json["isError"].type == JSONType.false_, "isError should be false");
+}
+
+/// Serialize ToolDefinition to JSON
+unittest {
+	import std.json : parseJSON;
+
+	auto schema = parseJSON(`{"type":"object","properties":{}}`);
+	auto def = ToolDefinition("my_tool", "A test tool", schema);
+	auto json = def.toJSON();
+	assert(json["name"].str == "my_tool", "Name should be 'my_tool'");
+	assert(json["description"].str == "A test tool", "Description should match");
+	assert("inputSchema" in json, "Should have inputSchema");
+	assert(json["inputSchema"]["type"].str == "object", "Schema type should be 'object'");
+}
+
+/// Serialize ServerCapabilities to JSON
+unittest {
+	ServerCapabilities caps;
+	caps.tools = ToolsCapability(false);
+	auto json = caps.toJSON();
+	assert("tools" in json, "Capabilities should have 'tools'");
+	assert(json["tools"]["listChanged"].type == JSONType.false_, "listChanged should be false");
+}
+
+/// nullJSON returns a null JSONValue
+unittest {
+	import mcp.protocol : nullJSON;
+
+	auto val = nullJSON();
+	assert(val.type == JSONType.null_, "nullJSON() should return JSONType.null_");
 }

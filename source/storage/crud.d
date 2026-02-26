@@ -739,3 +739,212 @@ class CRUDOperations {
 		return texts;
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Unit tests
+// ---------------------------------------------------------------------------
+
+version(unittest) {
+	import std.file : exists, remove;
+	import storage.connection : DBConnection;
+	import storage.schema : SchemaManager;
+
+	private struct TestDB {
+		DBConnection conn;
+		CRUDOperations crud;
+		string path;
+
+		static TestDB create()
+		{
+			import std.process : thisProcessID;
+			import std.conv : to;
+
+			auto path = "test_crud_" ~ to!string(thisProcessID) ~ ".sqlite";
+			if(exists(path))
+				remove(path);
+			auto conn = new DBConnection(path);
+			auto schema = new SchemaManager(conn);
+			schema.initializeSchema();
+			auto crud = new CRUDOperations(conn);
+			return TestDB(conn, crud, path);
+		}
+
+		void cleanup()
+		{
+			if(conn !is null)
+				conn.close();
+			if(exists(path))
+				remove(path);
+		}
+	}
+}
+
+/// Test database creation and file existence
+unittest {
+	auto db = TestDB.create();
+	scope(exit)
+		db.cleanup();
+
+	assert(exists(db.path), "Database file should exist");
+}
+
+/// Test schema initialization — verify all 5 core tables exist
+unittest {
+	auto db = TestDB.create();
+	scope(exit)
+		db.cleanup();
+
+	auto stmt = db.conn.prepare("
+		SELECT name FROM sqlite_master
+		WHERE type='table'
+		ORDER BY name
+	");
+	auto result = stmt.execute();
+
+	string[] tables;
+	foreach(row; result) {
+		tables ~= row["name"].as!string;
+	}
+
+	assert(tables.canFind("packages"), "packages table should exist");
+	assert(tables.canFind("modules"), "modules table should exist");
+	assert(tables.canFind("functions"), "functions table should exist");
+	assert(tables.canFind("types"), "types table should exist");
+	assert(tables.canFind("code_examples"), "code_examples table should exist");
+}
+
+/// Test package CRUD — insert and retrieve a package
+unittest {
+	auto db = TestDB.create();
+	scope(exit)
+		db.cleanup();
+
+	PackageMetadata pkg;
+	pkg.name = "test-package";
+	pkg.version_ = "1.0.0";
+	pkg.description = "A test package";
+	pkg.license = "MIT";
+	pkg.authors = ["Test Author"];
+	pkg.tags = ["test", "example"];
+
+	long pkgId = db.crud.insertPackage(pkg);
+	assert(pkgId > 0, "Package ID should be positive");
+
+	auto retrieved = db.crud.getPackage("test-package");
+	assert(retrieved.name == pkg.name);
+	assert(retrieved.version_ == pkg.version_);
+	assert(retrieved.description == pkg.description);
+}
+
+/// Test module CRUD — insert and retrieve a module
+unittest {
+	auto db = TestDB.create();
+	scope(exit)
+		db.cleanup();
+
+	PackageMetadata pkg;
+	pkg.name = "test-pkg";
+	pkg.version_ = "1.0.0";
+	long pkgId = db.crud.insertPackage(pkg);
+
+	ModuleDoc mod;
+	mod.name = "test.module.example";
+	mod.packageName = "test-pkg";
+	mod.docComment = "Test module";
+
+	long modId = db.crud.insertModule(pkgId, mod);
+	assert(modId > 0, "Module ID should be positive");
+
+	long retrievedId = db.crud.getModuleId("test.module.example");
+	assert(retrievedId == modId);
+}
+
+/// Test function CRUD — insert with performance attributes, retrieve and verify
+unittest {
+	auto db = TestDB.create();
+	scope(exit)
+		db.cleanup();
+
+	PackageMetadata pkg;
+	pkg.name = "test-pkg";
+	pkg.version_ = "1.0.0";
+	long pkgId = db.crud.insertPackage(pkg);
+
+	ModuleDoc mod;
+	mod.name = "test.module";
+	long modId = db.crud.insertModule(pkgId, mod);
+
+	FunctionDoc func;
+	func.name = "testFunction";
+	func.fullyQualifiedName = "test.module.testFunction";
+	func.signature = "void testFunction(int x)";
+	func.returnType = "void";
+	func.docComment = "A test function";
+	func.parameters = ["int x"];
+	func.isTemplate = false;
+	func.performance.isNogc = true;
+	func.performance.isPure = true;
+
+	long funcId = db.crud.insertFunction(modId, func);
+	assert(funcId > 0, "Function ID should be positive");
+
+	auto retrieved = db.crud.getFunction(funcId);
+	assert(retrieved.name == func.name);
+	assert(retrieved.signature == func.signature);
+	assert(retrieved.performance.isNogc);
+	assert(retrieved.performance.isPure);
+}
+
+/// Test code examples — insert and retrieve code examples for a function
+unittest {
+	auto db = TestDB.create();
+	scope(exit)
+		db.cleanup();
+
+	PackageMetadata pkg;
+	pkg.name = "test-pkg";
+	pkg.version_ = "1.0.0";
+	long pkgId = db.crud.insertPackage(pkg);
+
+	ModuleDoc mod;
+	mod.name = "test.module";
+	long modId = db.crud.insertModule(pkgId, mod);
+
+	FunctionDoc func;
+	func.name = "testFunc";
+	func.fullyQualifiedName = "test.module.testFunc";
+	long funcId = db.crud.insertFunction(modId, func);
+
+	CodeExample example;
+	example.functionId = funcId;
+	example.code = "testFunc(42);";
+	example.description = "Basic usage";
+	example.isRunnable = true;
+	example.isUnittest = false;
+	example.requiredImports = ["test.module"];
+
+	long exId = db.crud.insertCodeExample(example);
+	assert(exId > 0, "Example ID should be positive");
+
+	auto examples = db.crud.getCodeExamplesForFunction(funcId);
+	assert(examples.length == 1);
+	assert(examples[0].code == example.code);
+}
+
+/// Test statistics — insert 2 packages, check getStats().packageCount
+unittest {
+	auto db = TestDB.create();
+	scope(exit)
+		db.cleanup();
+
+	PackageMetadata pkg;
+	pkg.name = "pkg1";
+	pkg.version_ = "1.0.0";
+	db.crud.insertPackage(pkg);
+
+	pkg.name = "pkg2";
+	db.crud.insertPackage(pkg);
+
+	auto stats = db.crud.getStats();
+	assert(stats.packageCount == 2);
+}

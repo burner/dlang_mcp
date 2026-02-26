@@ -1664,3 +1664,155 @@ string[] extractDocExamples(string docComment)
 
 	return examples;
 }
+
+// ===========================================================================
+// Unit tests (migrated from tests/unit/test_parser.d)
+// ===========================================================================
+
+version(unittest) {
+	/// Creates a temporary test directory with D source fixtures for parser testing.
+	/// Returns the path to the created directory.
+	private string createParserTestFixtures()
+	{
+		import std.file : mkdirRecurse, exists, rmdirRecurse;
+		import std.path : buildPath;
+		import std.process : thisProcessID;
+
+		auto testDataDir = buildPath(tempDir(), "ddoc_parser_test_" ~ to!string(thisProcessID));
+		if(exists(testDataDir)) {
+			rmdirRecurse(testDataDir);
+		}
+		mkdirRecurse(testDataDir);
+
+		// Write test D source file
+		auto testSource = buildPath(testDataDir, "test.d");
+		import std.file : write;
+
+		write(testSource, "/// Test module\nmodule test;\n\n/// A simple function\n/// Example:\n/// ---\n/// auto result = add(1, 2);\n/// assert(result == 3);\n/// ---\nint add(int a, int b) @nogc @safe pure {\n    return a + b;\n}\n\nunittest {\n    assert(add(1, 2) == 3);\n    assert(add(-1, 1) == 0);\n}\n\n/// A template function\nT max(T)(T a, T b) if (is(T : int)) {\n    return a > b ? a : b;\n}\n\n/// Test class\nclass TestClass {\n    /// Method\n    void doSomething() @safe {\n    }\n}\n");
+
+		return testDataDir;
+	}
+}
+
+/// Extract unittest blocks from a D source file
+unittest {
+	import std.file : rmdirRecurse, exists;
+	import std.path : buildPath;
+
+	auto testDataDir = createParserTestFixtures();
+	scope(exit)
+		if(exists(testDataDir))
+			rmdirRecurse(testDataDir);
+
+	auto sourcePath = buildPath(testDataDir, "test.d");
+	auto examples = extractUnittestBlocks(sourcePath, "test-package");
+	assert(examples.length >= 1);
+	assert(examples[0].isUnittest);
+	assert(examples[0].isRunnable);
+	assert(examples[0].code.canFind("assert"));
+}
+
+/// Extract imports from a D source file
+unittest {
+	import std.file : rmdirRecurse, exists, mkdirRecurse, write;
+	import std.path : buildPath;
+	import std.process : thisProcessID;
+
+	auto testDir = buildPath(tempDir(), "ddoc_import_test_" ~ to!string(thisProcessID));
+	mkdirRecurse(testDir);
+	scope(exit)
+		if(exists(testDir))
+			rmdirRecurse(testDir);
+
+	auto testFile = buildPath(testDir, "imports.d");
+	write(testFile, "import std.stdio;\nimport std.algorithm : map, filter;\nimport std.range;\n\nvoid main() {\n    writeln(\"test\");\n}\n");
+
+	auto imports = analyzeImportRequirements(testFile);
+	assert(imports.canFind("std.stdio"));
+	assert(imports.canFind("std.algorithm"));
+	assert(imports.canFind("std.range"));
+}
+
+/// Extract doc examples from a documentation comment string
+unittest {
+	string docComment = "A simple function\nExample:\n---\nauto x = 1;\n---\n";
+	auto examples = extractDocExamples(docComment);
+	assert(examples.length >= 1);
+	assert(examples[0].canFind("auto x = 1"));
+}
+
+/// Test conversion functions: toFunctionDoc, toTypeDoc, toModuleDoc
+unittest {
+	import models.types : PackageMetadata;
+
+	// Test FuncInfo -> FunctionDoc conversion
+	FuncInfo func;
+	func.name = "add";
+	func.signature = "int add(int a, int b)";
+	func.returnType = "int";
+	func.docComment = "Adds two numbers";
+	func.parameters = ["int a", "int b"];
+	func.isSafe = true;
+	func.isNogc = true;
+	func.isPure = true;
+
+	auto funcDoc = toFunctionDoc(func, "test.mod", "test-pkg");
+	assert(funcDoc.name == "add");
+	assert(funcDoc.fullyQualifiedName == "test.mod.add");
+	assert(funcDoc.moduleName == "test.mod");
+	assert(funcDoc.packageName == "test-pkg");
+	assert(funcDoc.performance.isSafe);
+	assert(funcDoc.performance.isNogc);
+	assert(funcDoc.performance.isPure);
+
+	// Test ParsedType -> TypeDoc conversion
+	ParsedType type;
+	type.name = "MyClass";
+	type.kind = "class";
+	type.docComment = "A test class";
+	type.baseClasses = ["BaseClass"];
+
+	auto typeDoc = toTypeDoc(type, "test.mod", "test-pkg");
+	assert(typeDoc.name == "MyClass");
+	assert(typeDoc.fullyQualifiedName == "test.mod.MyClass");
+	assert(typeDoc.kind == "class");
+	assert(typeDoc.baseClasses.length == 1);
+
+	// Test ParsedModule -> ModuleDoc conversion
+	ParsedModule mod;
+	mod.name = "test.mod";
+	mod.docComment = "Test module";
+	mod.functions = [func];
+	mod.types = [type];
+
+	auto modDoc = toModuleDoc(mod, "test-pkg");
+	assert(modDoc.name == "test.mod");
+	assert(modDoc.packageName == "test-pkg");
+	assert(modDoc.functions.length == 1);
+	assert(modDoc.types.length == 1);
+}
+
+/// Test PackageMetadata.fromJSON deserialization
+unittest {
+	import models.types : PackageMetadata;
+	import std.json : parseJSON;
+
+	string jsonStr = `{
+        "name": "test-pkg",
+        "version": "1.2.3",
+        "description": "A test package",
+        "authors": ["Author1", "Author2"],
+        "tags": ["test", "demo"],
+        "license": "MIT"
+    }`;
+
+	auto json = parseJSON(jsonStr);
+	auto pkg = PackageMetadata.fromJSON(json);
+
+	assert(pkg.name == "test-pkg");
+	assert(pkg.version_ == "1.2.3");
+	assert(pkg.description == "A test package");
+	assert(pkg.authors.length == 2);
+	assert(pkg.tags.length == 2);
+	assert(pkg.license == "MIT");
+}

@@ -345,3 +345,296 @@ class TfIdfEmbedder : Embedder {
 		}
 	}
 }
+
+version(unittest) {
+	private bool isZeroVector(float[] vec)
+	{
+		foreach(v; vec)
+			if(v != 0.0f)
+				return false;
+		return true;
+	}
+
+	private float cosineSimilarity(float[] a, float[] b)
+	{
+		import std.math : sqrt;
+
+		if(a.length != b.length)
+			return 0.0f;
+
+		float dot = 0.0f;
+		float normA = 0.0f;
+		float normB = 0.0f;
+
+		foreach(i; 0 .. a.length) {
+			dot += a[i] * b[i];
+			normA += a[i] * a[i];
+			normB += b[i] * b[i];
+		}
+
+		auto denom = sqrt(normA) * sqrt(normB);
+		if(denom < 1e-10f)
+			return 0.0f;
+
+		return dot / denom;
+	}
+}
+
+/// Test basic TF-IDF embedding generation
+unittest {
+	auto embedder = new TfIdfEmbedder(100);
+	assert(embedder.isAvailable());
+	assert(embedder.dimensions() == 100);
+	assert(embedder.name() == "TF-IDF");
+
+	auto vec = embedder.embed("function test string int array");
+
+	assert(vec.length == 100);
+	assert(!isZeroVector(vec));
+}
+
+/// Test TF-IDF batch embedding
+unittest {
+	auto embedder = new TfIdfEmbedder(50);
+
+	string[] texts = [
+		"function return void", "class struct interface", "import module package"
+	];
+
+	auto vecs = embedder.embedBatch(texts);
+
+	assert(vecs.length == 3);
+	foreach(vec; vecs) {
+		assert(vec.length == 50);
+	}
+}
+
+/// Test cosine similarity between embeddings
+unittest {
+	auto embedder = new TfIdfEmbedder(100);
+
+	auto vec1 = embedder.embed("function string array");
+	auto vec2 = embedder.embed("function string list");
+	auto vec3 = embedder.embed("class object method");
+
+	auto sim12 = cosineSimilarity(vec1, vec2);
+	auto sim13 = cosineSimilarity(vec1, vec3);
+
+	assert(sim12 > sim13, "Similar texts should have higher similarity");
+}
+
+/// Test TF-IDF embedding of empty string
+unittest {
+	auto embedder = new TfIdfEmbedder(50);
+	auto vec = embedder.embed("");
+
+	assert(vec.length == 50, "Empty string should still produce correct dimension vector");
+	assert(isZeroVector(vec), "Empty string should produce zero vector");
+}
+
+/// Test TF-IDF embedding of single known word
+unittest {
+	auto embedder = new TfIdfEmbedder(100);
+	auto vec = embedder.embed("function");
+
+	assert(vec.length == 100);
+	assert(!isZeroVector(vec), "Known vocabulary word should produce non-zero vector");
+}
+
+/// Test TF-IDF embedding of unknown words
+unittest {
+	auto embedder = new TfIdfEmbedder(50);
+	auto vec = embedder.embed("xyzzy qwerty asdfgh");
+
+	assert(vec.length == 50);
+	assert(isZeroVector(vec), "Unknown words should produce zero vector");
+}
+
+/// Test TF-IDF vector normalization (unit L2 norm)
+unittest {
+	import std.math : sqrt, abs;
+	import std.conv : text;
+
+	auto embedder = new TfIdfEmbedder(100);
+	auto vec = embedder.embed("function return string class struct");
+
+	if(!isZeroVector(vec)) {
+		float norm = 0.0f;
+		foreach(v; vec)
+			norm += v * v;
+		norm = sqrt(norm);
+
+		assert(abs(norm - 1.0f) < 0.01f, "Embedding should be L2-normalized, got norm=" ~ text(norm));
+	}
+}
+
+/// Test TF-IDF deterministic output
+unittest {
+	auto embedder = new TfIdfEmbedder(100);
+	auto vec1 = embedder.embed("function return string");
+	auto vec2 = embedder.embed("function return string");
+
+	assert(vec1.length == vec2.length);
+	foreach(i; 0 .. vec1.length) {
+		assert(vec1[i] == vec2[i], "Same input should produce identical vectors");
+	}
+}
+
+/// Test TF-IDF different inputs produce different vectors
+unittest {
+	auto embedder = new TfIdfEmbedder(100);
+	auto vec1 = embedder.embed("function return void");
+	auto vec2 = embedder.embed("class struct interface");
+
+	bool allSame = true;
+	foreach(i; 0 .. vec1.length) {
+		if(vec1[i] != vec2[i]) {
+			allSame = false;
+			break;
+		}
+	}
+	assert(!allSame, "Different inputs should produce different vectors");
+}
+
+/// Test TF-IDF dimension parameter is respected
+unittest {
+	auto small = new TfIdfEmbedder(10);
+	assert(small.dimensions() == 10);
+	auto vec1 = small.embed("function return");
+	assert(vec1.length == 10);
+
+	auto large = new TfIdfEmbedder(500);
+	assert(large.dimensions() == 500);
+	auto vec2 = large.embed("function return");
+	assert(vec2.length == 500);
+}
+
+/// Test TF-IDF training changes IDF weights
+unittest {
+	auto embedder = new TfIdfEmbedder(200);
+
+	auto vecBefore = embedder.embed("function return string");
+
+	string[] corpus = [
+		"function return string int", "class struct interface enum",
+		"function void auto range", "import module package template",
+		"function function function string"
+	];
+	embedder.train(corpus);
+
+	auto vecAfter = embedder.embed("function return string");
+
+	bool changed = false;
+	foreach(i; 0 .. vecBefore.length) {
+		if(vecBefore[i] != vecAfter[i]) {
+			changed = true;
+			break;
+		}
+	}
+	assert(changed, "Training should change IDF weights and produce different vectors");
+}
+
+/// Test TF-IDF addToVocabulary
+unittest {
+	auto embedder = new TfIdfEmbedder(200);
+
+	auto vecBefore = embedder.embed("customterm");
+	assert(isZeroVector(vecBefore), "Unknown term should produce zero vector");
+
+	embedder.addToVocabulary("customterm");
+
+	auto vecAfter = embedder.embed("customterm");
+	assert(!isZeroVector(vecAfter), "Added term should now produce non-zero vector");
+}
+
+/// Test TF-IDF save and load roundtrip
+unittest {
+	import std.file : exists, remove, tempDir;
+	import std.path : buildPath;
+	import std.math : abs;
+
+	auto tempVocabPath = buildPath(tempDir(), "test_tfidf_vocab.json");
+	scope(exit)
+		if(exists(tempVocabPath))
+			remove(tempVocabPath);
+
+	auto embedder = new TfIdfEmbedder(100);
+	embedder.addToVocabulary("testsaveterm");
+
+	embedder.train(["testsaveterm function return", "class struct"]);
+
+	auto vecOriginal = embedder.embed("function testsaveterm");
+
+	embedder.save(tempVocabPath);
+	assert(exists(tempVocabPath), "Save should create the vocabulary file");
+
+	auto embedder2 = new TfIdfEmbedder(100);
+	bool loaded = embedder2.load(tempVocabPath);
+	assert(loaded, "Load should succeed");
+
+	auto vecLoaded = embedder2.embed("function testsaveterm");
+
+	assert(vecOriginal.length == vecLoaded.length);
+	foreach(i; 0 .. vecOriginal.length) {
+		assert(abs(vecOriginal[i] - vecLoaded[i]) < 1e-6f,
+				"Loaded embedder should produce same vectors");
+	}
+}
+
+/// Test TF-IDF load non-existent file returns false
+unittest {
+	auto embedder = new TfIdfEmbedder(50);
+	bool loaded = embedder.load("/tmp/definitely_does_not_exist_abc123.json");
+	assert(!loaded, "Loading non-existent file should return false");
+}
+
+/// Test TF-IDF batch consistency with individual embed
+unittest {
+	auto embedder = new TfIdfEmbedder(100);
+
+	string[] texts = ["function return void", "class struct", "import module"];
+
+	auto batchVecs = embedder.embedBatch(texts);
+
+	foreach(i, t; texts) {
+		auto singleVec = embedder.embed(t);
+		assert(singleVec.length == batchVecs[i].length);
+		foreach(j; 0 .. singleVec.length) {
+			assert(singleVec[j] == batchVecs[i][j],
+					"Batch embed should produce same results as individual embed");
+		}
+	}
+}
+
+/// Test TF-IDF vocabulary capacity is respected
+unittest {
+	auto embedder = new TfIdfEmbedder(5);
+	assert(embedder.dimensions() == 5);
+
+	embedder.addToVocabulary("overflow_term_1");
+	embedder.addToVocabulary("overflow_term_2");
+
+	auto vec = embedder.embed("function");
+	assert(vec.length == 5);
+}
+
+/// Test TF-IDF tokenizer is case insensitive
+unittest {
+	auto embedder = new TfIdfEmbedder(100);
+
+	auto vec1 = embedder.embed("Function Return String");
+	auto vec2 = embedder.embed("function return string");
+
+	foreach(i; 0 .. vec1.length) {
+		assert(vec1[i] == vec2[i], "Tokenizer should be case-insensitive");
+	}
+}
+
+/// Test TF-IDF embed batch with empty input
+unittest {
+	auto embedder = new TfIdfEmbedder(50);
+	string[] empty;
+	auto vecs = embedder.embedBatch(empty);
+
+	assert(vecs.length == 0, "Empty batch should return empty result");
+}

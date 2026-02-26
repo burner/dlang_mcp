@@ -130,3 +130,27 @@ class EmbeddingManager {
 		instance = null;
 	}
 }
+
+version(unittest) {
+	private bool isZeroVector(float[] vec)
+	{
+		foreach(v; vec)
+			if(v != 0.0f)
+				return false;
+		return true;
+	}
+}
+
+/// Test EmbeddingManager singleton and basic embedding
+unittest {
+	EmbeddingManager.reset();
+	auto manager = EmbeddingManager.getInstance();
+
+	assert(manager !is null);
+	assert(manager.dimensions() > 0);
+
+	auto vec = manager.embed("test string");
+
+	assert(vec.length == manager.dimensions());
+	assert(!isZeroVector(vec));
+}

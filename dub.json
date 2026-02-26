@@ -1,33 +1,49 @@
 {
+	"targetName": "dlang_mcp",
+	"authors": [
+		"burner"
+	],
+	"lflags-linux": [
+		"-rpath",
+		"$$ORIGIN/../lib"
+	],
+	"license": "BSL-1.0",
+	"targetPath": "bin",
+	"copyright": "Copyright © 2026, burner",
 	"name": "dlang_mcp",
 	"description": "MCP server for D language tools with semantic package search",
-	"authors": ["burner"],
-	"copyright": "Copyright © 2026, burner",
-	"license": "BSL-1.0",
-	"targetType": "executable",
-	"targetName": "dlang_mcp",
-	"targetPath": "bin",
 	"dependencies": {
 		"d2sqlite3": "~>1.0.0",
-		"bindbc-onnxruntime": "~>1.2.0",
-		"vibe-d:http": "~>0.10.3"
+		"vibe-d:http": "~>0.10.3",
+		"bindbc-onnxruntime": "~>1.2.0"
 	},
-	"lflags-linux": ["-rpath", "$$ORIGIN/../lib"],
+	"targetType": "executable",
 	"configurations": [
 		{
-			"name": "default",
-			"targetName": "dlang_mcp",
 			"mainSourceFile": "source/app.d",
-			"versions": ["VibeDisableCommandLineParsing"]
+			"targetType": "executable",
+			"targetName": "dlang_mcp",
+			"versions": [
+				"VibeDisableCommandLineParsing"
+			],
+			"name": "default"
 		},
 		{
-			"name": "test",
-			"targetType": "executable",
-			"sourcePaths": ["source", "tests"],
-			"importPaths": ["source", "tests"],
-			"mainSourceFile": "tests/runner.d",
 			"targetName": "dlang_mcp_test",
-			"versions": ["TestMode"]
+			"mainSourceFile": "tests/runner.d",
+			"versions": [
+				"TestMode"
+			],
+			"name": "test",
+			"sourcePaths": [
+				"source",
+				"tests"
+			],
+			"importPaths": [
+				"source",
+				"tests"
+			],
+			"targetType": "executable"
 		}
 	]
 }
