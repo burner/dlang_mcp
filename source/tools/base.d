@@ -214,3 +214,76 @@ unittest {
 	auto schema = tool.inputSchema;
 	assert(schema["type"].str == "object");
 }
+
+// -- CLI tool execution tests --
+// These test the tool execute + toJSON flow used by the CLI --tool flags.
+
+version(unittest) {
+	import tools.dfmt : DfmtTool;
+	import tools.dscanner : DscannerTool;
+	import tools.compile_check : CompileCheckTool;
+	import tools.outline : ModuleOutlineTool;
+}
+
+/// DfmtTool produces valid JSON result via execute + toJSON
+unittest {
+	import std.json : parseJSON, JSONType;
+
+	auto tool = new DfmtTool();
+	auto args = parseJSON(`{"code":"int x=1;"}`);
+	auto result = tool.execute(args);
+	auto json = result.toJSON();
+	assert("content" in json, "Result should have 'content' field");
+	assert("isError" in json, "Result should have 'isError' field");
+	assert(json["isError"].type == JSONType.false_, "dfmt with valid code should not be an error");
+	assert(json["content"].array.length > 0, "Result should have at least one content block");
+	assert(json["content"][0]["type"].str == "text", "Content type should be 'text'");
+}
+
+/// DscannerTool works with mode parameter via JSON args
+unittest {
+	import std.json : parseJSON, JSONType;
+
+	auto tool = new DscannerTool();
+	auto args = parseJSON(`{"code":"void main(){}", "mode":"sloc"}`);
+	auto result = tool.execute(args);
+	auto json = result.toJSON();
+	assert(json["isError"].type == JSONType.false_, "dscanner sloc mode should not error");
+	assert(json["content"].array.length > 0, "Should have content");
+}
+
+/// Tool returning error sets isError=true in JSON output
+unittest {
+	import std.json : parseJSON, JSONType;
+
+	auto tool = new FetchPackageTool();
+	auto args = parseJSON(`{}`);
+	auto result = tool.execute(args);
+	auto json = result.toJSON();
+	assert(json["isError"].type == JSONType.true_,
+			"Missing required param should produce isError=true");
+}
+
+/// ModuleOutlineTool produces valid JSON for inline code
+unittest {
+	import std.json : parseJSON, JSONType;
+
+	auto tool = new ModuleOutlineTool();
+	auto args = parseJSON(`{"code":"module test; void foo() {}"}`);
+	auto result = tool.execute(args);
+	auto json = result.toJSON();
+	assert(json["isError"].type == JSONType.false_, "module outline should succeed");
+	assert(json["content"].array.length > 0, "Should have content");
+}
+
+/// CompileCheckTool produces valid JSON for inline code
+unittest {
+	import std.json : parseJSON, JSONType;
+
+	auto tool = new CompileCheckTool();
+	auto args = parseJSON(`{"code":"void main() { int x = 1; }"}`);
+	auto result = tool.execute(args);
+	auto json = result.toJSON();
+	assert("content" in json, "Result should have 'content'");
+	assert("isError" in json, "Result should have 'isError'");
+}

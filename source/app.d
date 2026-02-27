@@ -95,6 +95,27 @@ struct CliOptions {
 	bool vverbose;
 	/** Process execution timeout in seconds (default: 30). */
 	int timeout = 30;
+
+	// -- Per-tool CLI flags (JSON args) --
+	string toolDscanner;
+	string toolDfmt;
+	string toolCompileCheck;
+	string toolCoverageAnalysis;
+	string toolBuildProject;
+	string toolRunTests;
+	string toolRunProject;
+	string toolFetchPackage;
+	string toolUpgradeDeps;
+	string toolAnalyzeProject;
+	string toolDdocAnalyze;
+	string toolModuleOutline;
+	string toolListModules;
+	string toolCtagsSearch;
+	string toolSearchPackages;
+	string toolSearchFunctions;
+	string toolSearchTypes;
+	string toolSearchExamples;
+	string toolGetImports;
 }
 
 version(TestMode) {
@@ -134,10 +155,41 @@ version(TestMode) {
 					"http", "Run MCP server with HTTP transport", &opts.http,
 					"port", "HTTP port (default: 3000)", &opts.port, "host",
 					"HTTP host (default: 127.0.0.1)", &opts.host,
-					"verbose|v", "Enable verbose logging to stderr", &opts.verbose,
-					"vverbose", "Enable trace-level logging to stderr",
-					&opts.vverbose, "timeout",
-					"Process execution timeout in seconds (default: 30)", &opts.timeout,);
+					"verbose|v", "Enable verbose logging to stderr", &opts.verbose, "vverbose",
+					"Enable trace-level logging to stderr", &opts.vverbose, "timeout",
+					"Process execution timeout in seconds (default: 30)",
+					&opts.timeout, "dscanner",
+					"Run dscanner tool with JSON args", &opts.toolDscanner,
+					"dfmt", "Run dfmt tool with JSON args", &opts.toolDfmt,
+					"compile-check", "Run compile_check tool with JSON args",
+					&opts.toolCompileCheck,
+					"coverage-analysis", "Run coverage_analysis tool with JSON args",
+					&opts.toolCoverageAnalysis, "build-project",
+					"Run build_project tool with JSON args",
+					&opts.toolBuildProject,
+					"run-tests", "Run run_tests tool with JSON args",
+					&opts.toolRunTests, "run-project", "Run run_project tool with JSON args",
+					&opts.toolRunProject, "fetch-package",
+					"Run fetch_package tool with JSON args",
+					&opts.toolFetchPackage,
+					"upgrade-dependencies", "Run upgrade_dependencies tool with JSON args",
+					&opts.toolUpgradeDeps, "tool-analyze-project",
+					"Run analyze_project tool with JSON args", &opts.toolAnalyzeProject,
+					"tool-ddoc-analyze",
+					"Run ddoc_analyze tool with JSON args",
+					&opts.toolDdocAnalyze, "module-outline",
+					"Run module_outline tool with JSON args", &opts.toolModuleOutline,
+					"list-modules", "Run list_modules tool with JSON args",
+					&opts.toolListModules,
+					"ctags-search", "Run ctags_search tool with JSON args",
+					&opts.toolCtagsSearch, "search-packages",
+					"Run search_packages tool with JSON args", &opts.toolSearchPackages,
+					"search-functions", "Run search_functions tool with JSON args",
+					&opts.toolSearchFunctions,
+					"search-types", "Run search_types tool with JSON args",
+					&opts.toolSearchTypes, "search-examples",
+					"Run search_examples tool with JSON args", &opts.toolSearchExamples,
+					"get-imports", "Run get_imports tool with JSON args", &opts.toolGetImports,);
 		} catch(GetOptException e) {
 			stderr.writeln("Error: ", e.msg);
 			printHelp();
@@ -209,6 +261,40 @@ version(TestMode) {
 		if(opts.ingest) {
 			handleIngest(opts);
 			return;
+		}
+
+		// -- Tool CLI dispatch --
+		{
+			import std.typecons : tuple;
+
+			auto toolDispatches = [
+				tuple(opts.toolDscanner, () => cast(Tool)new DscannerTool()),
+				tuple(opts.toolDfmt, () => cast(Tool)new DfmtTool()),
+				tuple(opts.toolCompileCheck, () => cast(Tool)new CompileCheckTool()),
+				tuple(opts.toolCoverageAnalysis, () => cast(Tool)new CoverageAnalysisTool()),
+				tuple(opts.toolBuildProject, () => cast(Tool)new BuildProjectTool()),
+				tuple(opts.toolRunTests, () => cast(Tool)new RunTestsTool()),
+				tuple(opts.toolRunProject, () => cast(Tool)new RunProjectTool()),
+				tuple(opts.toolFetchPackage, () => cast(Tool)new FetchPackageTool()),
+				tuple(opts.toolUpgradeDeps, () => cast(Tool)new UpgradeDependenciesTool()),
+				tuple(opts.toolAnalyzeProject, () => cast(Tool)new AnalyzeProjectTool()),
+				tuple(opts.toolDdocAnalyze, () => cast(Tool)new DdocAnalyzeTool()),
+				tuple(opts.toolModuleOutline, () => cast(Tool)new ModuleOutlineTool()),
+				tuple(opts.toolListModules, () => cast(Tool)new ListProjectModulesTool()),
+				tuple(opts.toolCtagsSearch, () => cast(Tool)new CtagsSearchTool()),
+				tuple(opts.toolSearchPackages, () => cast(Tool)new PackageSearchTool()),
+				tuple(opts.toolSearchFunctions, () => cast(Tool)new FunctionSearchTool()),
+				tuple(opts.toolSearchTypes, () => cast(Tool)new TypeSearchTool()),
+				tuple(opts.toolSearchExamples, () => cast(Tool)new ExampleSearchTool()),
+				tuple(opts.toolGetImports, () => cast(Tool)new ImportTool()),
+			];
+
+			foreach(entry; toolDispatches) {
+				if(entry[0]!is null) {
+					executeToolCli(entry[1](), entry[0]);
+					return;
+				}
+			}
 		}
 
 		if(opts.http)
@@ -288,6 +374,37 @@ void printHelp()
 	writeln("  search_types    - Search for D types (classes, structs, etc.)");
 	writeln("  search_examples - Search for code examples");
 	writeln("  get_imports     - Get import statements for symbols");
+	writeln();
+	writeln("Tool CLI (run any MCP tool directly):");
+	writeln("  Each tool flag accepts a JSON string of parameters.");
+	writeln("  Output is the full ToolResult as JSON.");
+	writeln();
+	writeln("  --dscanner=JSON              Run dscanner analysis");
+	writeln("  --dfmt=JSON                  Run dfmt formatter");
+	writeln("  --compile-check=JSON         Run compile checker");
+	writeln("  --coverage-analysis=JSON     Run coverage analysis");
+	writeln("  --build-project=JSON         Run dub build");
+	writeln("  --run-tests=JSON             Run dub test");
+	writeln("  --run-project=JSON           Run dub project");
+	writeln("  --fetch-package=JSON         Fetch a dub package");
+	writeln("  --upgrade-dependencies=JSON  Upgrade dub dependencies");
+	writeln("  --tool-analyze-project=JSON  Analyze project structure");
+	writeln("  --tool-ddoc-analyze=JSON     Analyze project docs");
+	writeln("  --module-outline=JSON        Get module symbol outline");
+	writeln("  --list-modules=JSON          List project modules");
+	writeln("  --ctags-search=JSON          Search symbol definitions");
+	writeln("  --search-packages=JSON       Search dub packages");
+	writeln("  --search-functions=JSON      Search D functions");
+	writeln("  --search-types=JSON          Search D types");
+	writeln("  --search-examples=JSON       Search code examples");
+	writeln("  --get-imports=JSON           Get import statements");
+	writeln();
+	writeln("  Examples:");
+	writeln(`    ./bin/dlang_mcp --dfmt='{"code":"int x=1;"}'`);
+	writeln(`    ./bin/dlang_mcp --dscanner='{"code":"void main(){}", "mode":"sloc"}'`);
+	writeln(
+			`    ./bin/dlang_mcp --compile-check='{"code":"import std.stdio; void main(){writeln(42);}"}'`);
+	writeln(`    ./bin/dlang_mcp --build-project='{"project_path":"."}'`);
 }
 
 /**
@@ -746,6 +863,35 @@ void runDdocAnalyze(string projectPath, string outputPath)
 
 	std.file.write(outputPath, text);
 	writeln("DDoc analysis written to: ", outputPath);
+}
+
+/**
+ * Execute an MCP tool from the CLI with JSON arguments and print the result.
+ *
+ * Params:
+ *     tool = The tool instance to execute.
+ *     jsonArgs = JSON string containing the tool's input parameters.
+ *                If empty, defaults to "{}".
+ */
+void executeToolCli(Tool tool, string jsonArgs)
+{
+	import std.json : parseJSON, JSONException, JSONValue;
+
+	if(jsonArgs.length == 0)
+		jsonArgs = "{}";
+
+	JSONValue args;
+	try {
+		args = parseJSON(jsonArgs);
+	} catch(JSONException e) {
+		stderr.writeln("Error: Invalid JSON arguments: ", e.msg);
+		import core.stdc.stdlib : exit;
+
+		exit(1);
+	}
+
+	auto result = tool.execute(args);
+	writeln(result.toJSON().toPrettyString());
 }
 
 /**

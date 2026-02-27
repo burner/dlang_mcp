@@ -243,6 +243,62 @@ Add to `~/.config/zed/settings.json`:
 ./bin/dlang_mcp --help
 ```
 
+### Run MCP Tools Directly (No MCP Client Needed)
+
+Every MCP tool can be invoked directly from the command line. Pass a JSON string of parameters and get the full `ToolResult` back as JSON on stdout.
+
+```bash
+# Format D code
+./bin/dlang_mcp --dfmt='{"code":"int x=1;"}'
+
+# Static analysis
+./bin/dlang_mcp --dscanner='{"code":"void main(){}", "mode":"sloc"}'
+
+# Compile-check inline code
+./bin/dlang_mcp --compile-check='{"code":"import std.stdio; void main(){writeln(42);}"}'
+
+# Build a project
+./bin/dlang_mcp --build-project='{"project_path":"."}'
+
+# Run project tests
+./bin/dlang_mcp --run-tests='{"project_path":".", "verbose":true}'
+
+# Get module outline
+./bin/dlang_mcp --module-outline='{"code":"module test; void foo() {}"}'
+
+# Search symbol definitions
+./bin/dlang_mcp --ctags-search='{"query":"main", "project_path":"."}'
+
+# Fetch a dub package
+./bin/dlang_mcp --fetch-package='{"package_name":"silly"}'
+```
+
+All 19 tool flags:
+
+| Flag | Tool |
+|------|------|
+| `--dscanner=JSON` | Static analysis |
+| `--dfmt=JSON` | Code formatting |
+| `--compile-check=JSON` | Compile checking |
+| `--coverage-analysis=JSON` | Coverage analysis |
+| `--build-project=JSON` | Build project |
+| `--run-tests=JSON` | Run tests |
+| `--run-project=JSON` | Run project |
+| `--fetch-package=JSON` | Fetch package |
+| `--upgrade-dependencies=JSON` | Upgrade deps |
+| `--tool-analyze-project=JSON` | Analyze project |
+| `--tool-ddoc-analyze=JSON` | DDoc analysis |
+| `--module-outline=JSON` | Module outline |
+| `--list-modules=JSON` | List modules |
+| `--ctags-search=JSON` | Symbol search |
+| `--search-packages=JSON` | Search packages |
+| `--search-functions=JSON` | Search functions |
+| `--search-types=JSON` | Search types |
+| `--search-examples=JSON` | Search examples |
+| `--get-imports=JSON` | Get imports |
+
+> `--tool-analyze-project` and `--tool-ddoc-analyze` are prefixed with `tool-` to avoid conflict with the existing `--analyze-project` and `--ddoc-analyze` flags (which write to files instead of printing JSON).
+
 ## Semantic Search Setup (Optional)
 
 The search tools work out of the box with TF-IDF keyword search. For better results, you can optionally enable vector similarity search and/or neural embeddings.
