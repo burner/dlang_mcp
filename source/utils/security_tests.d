@@ -347,12 +347,12 @@ unittest {
 
 /// testToolErrorIsNotJsonRpcError
 unittest {
-	import utils.logging : setLogLevel, getLogLevel, LogLevel;
+	import std.logger : globalLogLevel, LogLevel;
 
-	auto savedLevel = getLogLevel();
-	setLogLevel(LogLevel.silent);
+	auto savedLevel = globalLogLevel;
+	globalLogLevel = LogLevel.off;
 	scope(exit)
-		setLogLevel(savedLevel);
+		globalLogLevel = savedLevel;
 
 	// A tool that throws during execute() should produce a successful
 	// JSON-RPC response with isError: true in the result, NOT a JSON-RPC error.
