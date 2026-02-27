@@ -10,7 +10,8 @@ module mcp.http_transport;
 import mcp.transport_interface : Transport;
 import mcp.transport : EOFException;
 import mcp.server : MCPServer;
-import mcp.protocol : parseRequest, serializeResponse, createParseErrorResponse, ProtocolException;
+import mcp.protocol : parseRequest, serializeResponse,
+	createParseErrorResponse, ProtocolException;
 import mcp.types : JsonRpcResponse;
 import std.json : JSONValue, parseJSON, JSONType;
 import std.conv : to;
@@ -19,7 +20,7 @@ import std.datetime : SysTime, Duration;
 import core.sync.mutex : Mutex;
 import core.sync.condition : Condition;
 import core.thread;
-import utils.logging : logInfo, logError;
+import std.logger : error;
 
 /** Metadata for an active Server-Sent Events session. */
 struct SSESession {
@@ -271,10 +272,10 @@ final class StreamableHTTPTransport : Transport {
 			auto rpcResponse = _server.handleRequest(request);
 			response.body = serializeResponse(rpcResponse);
 		} catch(ProtocolException e) {
-			logError("HTTP parse error: " ~ e.msg);
+			error("HTTP parse error: " ~ e.msg);
 			response.body = serializeResponse(createParseErrorResponse());
 		} catch(Exception e) {
-			logError("HTTP request error: " ~ e.msg);
+			error("HTTP request error: " ~ e.msg);
 			response.body = serializeResponse(createParseErrorResponse());
 		}
 
