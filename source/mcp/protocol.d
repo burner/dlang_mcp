@@ -8,7 +8,6 @@ module mcp.protocol;
 
 import std.json : JSONValue, parseJSON, JSONType;
 import mcp.types : JsonRpcRequest, JsonRpcResponse, JsonRpcError, JsonRpcErrorCode;
-import utils.logging : logError;
 
 /** Exception thrown when a protocol-level error is encountered during parsing. */
 class ProtocolException : Exception {
