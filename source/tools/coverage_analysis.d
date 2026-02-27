@@ -86,8 +86,17 @@ class CoverageAnalysisTool : BaseTool {
 			if(!isDir(dir))
 				return createErrorResult("Not a directory: " ~ dir);
 
-			foreach(entry; dirEntries(dir, "*.lst", SpanMode.shallow))
+			import std.path : baseName;
+
+			foreach(entry; dirEntries(dir, "*.lst", SpanMode.shallow)) {
+				auto base = baseName(entry.name);
+				// Skip dependency library .lst files (their names start with ".."
+				// because dmd/ldc encodes relative paths like ../../.dub/packages/...
+				// as ..-..-..-.dub-packages-... in the .lst filename).
+				if(base.length >= 2 && base[0 .. 2] == "..")
+					continue;
 				lstFiles ~= entry.name;
+			}
 
 			if(lstFiles.length == 0)
 				return createErrorResult("No .lst files found in: " ~ dir);
@@ -638,4 +647,63 @@ unittest {
 		}
 	}
 	assert(foundEmptyFunc, "Expected to find 'emptyFunc' in results with min_uncovered=0");
+}
+
+/// Test: directory scan filters out dependency .lst files (base name starts with "..")
+unittest {
+	import std.file : write, remove, tempDir, mkdir, rmdirRecurse;
+	import std.path : buildPath;
+	import std.process : thisProcessID;
+	import std.conv : to;
+	import std.json : parseJSON;
+	import std.exception : collectException;
+	import std.format : format;
+
+	string dir = buildPath(tempDir(), "cov_filter_test_" ~ to!string(thisProcessID));
+	mkdir(dir);
+	scope(exit)
+		collectException(rmdirRecurse(dir));
+
+	// Project .lst file — should be analyzed
+	enum projectLst = "       |module source.a;\n" ~ "       |void foo()\n" ~ "       |{\n"
+		~ "      1|    return;\n" ~ "       |}\n" ~ "source/a.d is 100% covered\n";
+
+	// Dependency .lst file — should be SKIPPED (base name starts with "..")
+	enum depLst = "       |module vibe.http.server;\n" ~ "       |void handle()\n" ~ "       |{\n"
+		~ "      1|    return;\n" ~ "       |}\n" ~ "vibe/http/server.d is 100% covered\n";
+
+	write(buildPath(dir, "source-a.lst"), projectLst);
+	write(buildPath(dir,
+			"..-..-..-.dub-packages-vibe-http-1.0.0-source-vibe-http-server.lst"), depLst);
+
+	auto tool = new CoverageAnalysisTool();
+	auto result = tool.execute(JSONValue(["directory": JSONValue(dir)]));
+
+	assert(!result.isError, "Expected success");
+	auto json = parseJSON(result.content[0].text);
+	assert(json["files_analyzed"].get!long == 1,
+			format("Expected 1 file analyzed (dependency skipped), got %d",
+				json["files_analyzed"].get!long));
+}
+
+/// Test: directory with only dependency .lst files returns error (all filtered out)
+unittest {
+	import std.file : write, remove, tempDir, mkdir, rmdirRecurse;
+	import std.path : buildPath;
+	import std.process : thisProcessID;
+	import std.conv : to;
+	import std.exception : collectException;
+
+	string dir = buildPath(tempDir(), "cov_deponly_test_" ~ to!string(thisProcessID));
+	mkdir(dir);
+	scope(exit)
+		collectException(rmdirRecurse(dir));
+
+	// Only dependency .lst files
+	enum depLst = "       |module dep;\n" ~ "      1|    return;\n" ~ "dep.d is 100% covered\n";
+	write(buildPath(dir, "..-..-..-.dub-packages-dep-1.0.0-source-dep.lst"), depLst);
+
+	auto tool = new CoverageAnalysisTool();
+	auto result = tool.execute(JSONValue(["directory": JSONValue(dir)]));
+	assert(result.isError, "Expected error when all .lst files are dependency files");
 }

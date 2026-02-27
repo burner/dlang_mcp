@@ -545,6 +545,13 @@ unittest {
 
 /// tools/call with throwing tool returns isError: true (not JSON-RPC error)
 unittest {
+	import utils.logging : setLogLevel, getLogLevel, LogLevel;
+
+	auto savedLevel = getLogLevel();
+	setLogLevel(LogLevel.silent);
+	scope(exit)
+		setLogLevel(savedLevel);
+
 	auto server = createTestServer();
 	initTestServer(server);
 	auto params = parseJSON(`{"name":"failing_tool","arguments":{}}`);
@@ -555,6 +562,13 @@ unittest {
 
 /// tools/call with throwing tool includes error message in content
 unittest {
+	import utils.logging : setLogLevel, getLogLevel, LogLevel;
+
+	auto savedLevel = getLogLevel();
+	setLogLevel(LogLevel.silent);
+	scope(exit)
+		setLogLevel(savedLevel);
+
 	auto server = createTestServer();
 	initTestServer(server);
 	auto params = parseJSON(`{"name":"failing_tool","arguments":{}}`);

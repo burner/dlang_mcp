@@ -347,6 +347,13 @@ unittest {
 
 /// testToolErrorIsNotJsonRpcError
 unittest {
+	import utils.logging : setLogLevel, getLogLevel, LogLevel;
+
+	auto savedLevel = getLogLevel();
+	setLogLevel(LogLevel.silent);
+	scope(exit)
+		setLogLevel(savedLevel);
+
 	// A tool that throws during execute() should produce a successful
 	// JSON-RPC response with isError: true in the result, NOT a JSON-RPC error.
 	auto server = new MCPServer();

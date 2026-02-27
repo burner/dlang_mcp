@@ -292,6 +292,12 @@ unittest {
 unittest {
 	import std.format : format;
 	import d2sqlite3 : SqliteException;
+	import utils.logging : setLogLevel, getLogLevel, LogLevel;
+
+	auto savedLevel = getLogLevel();
+	setLogLevel(LogLevel.silent);
+	scope(exit)
+		setLogLevel(savedLevel);
 
 	auto conn = new DBConnection(":memory:", "");
 	scope(exit)
@@ -309,6 +315,12 @@ unittest {
 /// Test prepare error handling — invalid SQL triggers SqliteException
 unittest {
 	import d2sqlite3 : SqliteException;
+	import utils.logging : setLogLevel, getLogLevel, LogLevel;
+
+	auto savedLevel = getLogLevel();
+	setLogLevel(LogLevel.silent);
+	scope(exit)
+		setLogLevel(savedLevel);
 
 	auto conn = new DBConnection(":memory:", "");
 	scope(exit)
