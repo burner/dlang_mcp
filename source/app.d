@@ -91,6 +91,8 @@ struct CliOptions {
 	string ddocAnalyzeOutput;
 	/** Enable verbose logging to stderr for debugging. */
 	bool verbose;
+	/** Enable very verbose (trace-level) logging to stderr. */
+	bool vverbose;
 	/** Process execution timeout in seconds (default: 30). */
 	int timeout = 30;
 }
@@ -132,7 +134,9 @@ version(TestMode) {
 					"http", "Run MCP server with HTTP transport", &opts.http,
 					"port", "HTTP port (default: 3000)", &opts.port, "host",
 					"HTTP host (default: 127.0.0.1)", &opts.host,
-					"verbose|v", "Enable verbose logging to stderr", &opts.verbose, "timeout",
+					"verbose|v", "Enable verbose logging to stderr", &opts.verbose,
+					"vverbose", "Enable trace-level logging to stderr",
+					&opts.vverbose, "timeout",
 					"Process execution timeout in seconds (default: 30)", &opts.timeout,);
 		} catch(GetOptException e) {
 			stderr.writeln("Error: ", e.msg);
@@ -140,10 +144,18 @@ version(TestMode) {
 			return;
 		}
 
-		if(opts.verbose) {
-			import utils.logging : enableVerboseLogging;
+		// Configure logging level. Default sharedLog writes to stderr.
+		// Default globalLogLevel is LogLevel.all, so we set it to error
+		// to only show errors unless verbose flags are used.
+		{
+			import std.logger : globalLogLevel, LogLevel;
 
-			enableVerboseLogging();
+			if(opts.vverbose)
+				globalLogLevel = LogLevel.trace;
+			else if(opts.verbose)
+				globalLogLevel = LogLevel.info;
+			else
+				globalLogLevel = LogLevel.error;
 		}
 
 		// Set process execution timeout
@@ -230,7 +242,9 @@ void printHelp()
 			"  ./bin/dlang_mcp --analyze-project=PATH Analyze a D project and write results to file");
 	writeln("  ./bin/dlang_mcp --ddoc-analyze=PATH    Analyze project docs/attributes via DMD JSON");
 	writeln("  ./bin/dlang_mcp --help                 Show this help");
-	writeln("  ./bin/dlang_mcp --verbose              Enable verbose logging to stderr");
+	writeln(
+			"  ./bin/dlang_mcp --verbose              Enable verbose (info-level) logging to stderr");
+	writeln("  ./bin/dlang_mcp --vverbose             Enable trace-level logging to stderr");
 	writeln();
 	writeln("Ingest options:");
 	writeln("  --package=NAME  Ingest single package by name");
