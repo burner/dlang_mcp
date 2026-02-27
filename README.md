@@ -9,36 +9,47 @@ MCP (Model Context Protocol) server for D language tools with semantic package s
 - actually not really sure if correctly used by the LLM or really useful
 - if you have something better, please tell me
 
-## Features
+## Features (20 MCP Tools)
 
-### Code Analysis Tools
-- **dscanner** - Static code analysis for D
-- **dfmt** - Code formatting
-- **ctags_search** - Symbol definition search
-- **compile_check** - Compile-check D source code without linking (syntax, type errors)
-- **ddoc_analyze** - Project-wide DDoc documentation analysis via DMD JSON
+### Code Quality & Analysis
 
-### Build & Project Tools
-- **build_project** - Build a D/dub project with structured error reporting
-- **run_tests** - Run dub project tests with structured pass/fail results
-- **run_project** - Run a D/dub project, passing arguments to the built program
-- **fetch_package** - Fetch a package from the dub registry by name
-- **upgrade_dependencies** - Upgrade project dependencies to latest allowed versions
-- **analyze_project** - Analyze project structure (dependencies, source files, modules)
+- **dscanner** — Static analysis for bugs, style issues, and complexity. Supports multiple modes: lint (default), syntax validation, import listing, line counts, AST generation, and ctags output. Configurable check presets (default, strict, minimal).
+- **dfmt** — Format D source code with configurable brace style (allman, otbs, stroustrup), indentation, and line length. Paste code in, get formatted code back.
+- **compile_check** — Compile-check D code without linking or running. Catches type errors, undefined identifiers, and syntax errors. Accepts inline code or a file path; set `dub_project` for automatic import path resolution. Supports dmd and ldc2.
+- **coverage_analysis** — Analyze code coverage from `.lst` files produced by `dmd -cov` or `ldc2 --cov`. Reports per-function coverage stats sorted by most uncovered lines. Point it at a single file or a directory to scan all `.lst` files.
 
-### Code Navigation Tools
-- **get_module_outline** - Get a structured outline of all symbols in a D source file
-- **list_project_modules** - List all modules in a project with their public API
+### Build, Test & Run
 
-### Semantic Search Tools (require database)
-- **search_packages** - Search D packages by name/description
-- **search_functions** - Search D functions by signature/docs
-- **search_types** - Search classes/structs/interfaces
-- **search_examples** - Search code examples
-- **get_imports** - Get import statements for symbols
+- **build_project** — Build a D/dub project and get structured results: success/failure, compiler errors with file/line/message, and warnings. Supports debug/release builds, compiler selection (dmd/ldc2), and force rebuild.
+- **run_tests** — Run unit tests for a D/dub project. Returns pass/fail count, test output, and compiler errors if the build fails. Supports test name filtering and verbose output.
+- **run_project** — Build and execute a D/dub project, returning stdout, stderr, and exit code. Pass arguments through to the built program.
 
-### Status
-- **get_feature_status** - Check which runtime features are enabled
+### Package & Dependency Management
+
+- **fetch_package** — Download a D package from the dub registry to the local cache. Optionally specify a version.
+- **upgrade_dependencies** — Upgrade project dependencies to their latest allowed versions. Supports `missing_only` (fetch without upgrading) and `verify` (check consistency without modifying).
+- **analyze_project** — Analyze a D/dub project's build configuration: project name, dependency versions, source files, import paths, and build settings. Uses `dub describe` with fallback to direct file parsing.
+
+### Code Navigation & Structure
+
+- **ctags_search** — Search for symbol definitions (functions, classes, structs, enums) by name across a project. Supports exact, prefix, and regex matching with kind filtering. Auto-generates the tags file when needed.
+- **get_module_outline** — Get a hierarchical outline of every symbol in a D source file: names, kinds, line numbers, visibility, attributes (`@safe`, `@nogc`, `nothrow`, `pure`), return types, parameters, and ddoc comments. Accepts a file path or inline code.
+- **list_project_modules** — List all modules in a project with summaries of their public APIs (functions, classes, structs, enums with signatures).
+- **ddoc_analyze** — Analyze documentation coverage and attribute usage across a project using DMD's JSON output. Reports per-module doc coverage percentages, function/type counts, and template statistics.
+
+### Semantic Search (requires indexed database)
+
+These tools search a local SQLite database of indexed D packages. Use `--ingest` to populate the database, and optionally enable ONNX neural embeddings or sqlite-vec vector similarity for better results (see [Semantic Search Setup](#semantic-search-setup-optional)).
+
+- **search_packages** — Search indexed D packages by name, description, or tags. Find libraries for a given task.
+- **search_functions** — Search function definitions by name, signature, or description across all indexed packages. Find how to do things in D.
+- **search_types** — Search type definitions (classes, structs, interfaces, enums) by name or description. Filter by kind.
+- **search_examples** — Search for runnable D code examples by description or code pattern. Returns complete snippets with required imports.
+- **get_imports** — Look up the required import statements for D symbols. Pass a symbol name, get back the `import` line.
+
+### Diagnostics
+
+- **get_feature_status** — Check which optional runtime features are available: database, ONNX embeddings, sqlite-vec, external tools (dscanner, dfmt), and active search mode. Useful for diagnosing issues.
 
 ## Quick Start
 
@@ -182,14 +193,20 @@ Add to `~/.config/zed/settings.json`:
 ## Command Line Reference
 
 ```bash
-# Run as MCP server (default)
+# Run as MCP server over stdio (default)
 ./bin/dlang_mcp
+
+# Run as MCP server over HTTP (SSE + streamable endpoints)
+./bin/dlang_mcp --http --port=3000 --host=127.0.0.1
 
 # Initialize the search database
 ./bin/dlang_mcp --init-db
 
 # Show database statistics
 ./bin/dlang_mcp --stats
+
+# Show runtime feature status
+./bin/dlang_mcp --feature-status
 
 # Ingest a single package from code.dlang.org
 ./bin/dlang_mcp --ingest --package=silly
@@ -209,8 +226,18 @@ Add to `~/.config/zed/settings.json`:
 # Mine usage patterns from indexed data
 ./bin/dlang_mcp --mine-patterns
 
+# Analyze a D project (standalone, no MCP)
+./bin/dlang_mcp --analyze-project=/path/to/project
+./bin/dlang_mcp --ddoc-analyze=/path/to/project
+
 # Test search with a query
 ./bin/dlang_mcp --test-search="hash table lookup"
+
+# Verbose logging (--verbose for info, --vverbose for trace)
+./bin/dlang_mcp --verbose
+
+# Set process execution timeout (default: 30s)
+./bin/dlang_mcp --timeout=60
 
 # Show help
 ./bin/dlang_mcp --help
