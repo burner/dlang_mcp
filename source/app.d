@@ -162,26 +162,25 @@ version(TestMode) {
 					"Run dscanner tool with JSON args", &opts.toolDscanner,
 					"dfmt", "Run dfmt tool with JSON args", &opts.toolDfmt,
 					"compile-check", "Run compile_check tool with JSON args",
-					&opts.toolCompileCheck,
-					"coverage-analysis", "Run coverage_analysis tool with JSON args",
-					&opts.toolCoverageAnalysis, "build-project",
-					"Run build_project tool with JSON args",
-					&opts.toolBuildProject,
-					"run-tests", "Run run_tests tool with JSON args",
-					&opts.toolRunTests, "run-project", "Run run_project tool with JSON args",
+					&opts.toolCompileCheck, "coverage-analysis",
+					"Analyze a .lst coverage file", &opts.toolCoverageAnalysis,
+					"build-project", "Run build_project tool with JSON args",
+					&opts.toolBuildProject, "run-tests",
+					"Run run_tests tool with JSON args", &opts.toolRunTests,
+					"run-project", "Run run_project tool with JSON args",
 					&opts.toolRunProject, "fetch-package",
 					"Run fetch_package tool with JSON args",
-					&opts.toolFetchPackage,
-					"upgrade-dependencies", "Run upgrade_dependencies tool with JSON args",
-					&opts.toolUpgradeDeps, "tool-analyze-project",
-					"Run analyze_project tool with JSON args", &opts.toolAnalyzeProject,
-					"tool-ddoc-analyze",
+					&opts.toolFetchPackage, "upgrade-dependencies",
+					"Run upgrade_dependencies tool with JSON args", &opts.toolUpgradeDeps,
+					"tool-analyze-project", "Run analyze_project tool with JSON args",
+					&opts.toolAnalyzeProject, "tool-ddoc-analyze",
 					"Run ddoc_analyze tool with JSON args",
-					&opts.toolDdocAnalyze, "module-outline",
-					"Run module_outline tool with JSON args", &opts.toolModuleOutline,
-					"list-modules", "Run list_modules tool with JSON args",
-					&opts.toolListModules,
-					"ctags-search", "Run ctags_search tool with JSON args",
+					&opts.toolDdocAnalyze,
+					"module-outline", "Run module_outline tool with JSON args",
+					&opts.toolModuleOutline, "list-modules",
+					"Run list_modules tool with JSON args", &opts.toolListModules,
+					"ctags-search",
+					"Run ctags_search tool with JSON args",
 					&opts.toolCtagsSearch, "search-packages",
 					"Run search_packages tool with JSON args", &opts.toolSearchPackages,
 					"search-functions", "Run search_functions tool with JSON args",
@@ -263,6 +262,13 @@ version(TestMode) {
 			return;
 		}
 
+		// -- Coverage analysis: accepts a .lst filename directly --
+		if(opts.toolCoverageAnalysis !is null) {
+			executeToolCli(new CoverageAnalysisTool(),
+					`{"file_path":"` ~ opts.toolCoverageAnalysis ~ `"}`);
+			return;
+		}
+
 		// -- Tool CLI dispatch --
 		{
 			import std.typecons : tuple;
@@ -271,7 +277,6 @@ version(TestMode) {
 				tuple(opts.toolDscanner, () => cast(Tool)new DscannerTool()),
 				tuple(opts.toolDfmt, () => cast(Tool)new DfmtTool()),
 				tuple(opts.toolCompileCheck, () => cast(Tool)new CompileCheckTool()),
-				tuple(opts.toolCoverageAnalysis, () => cast(Tool)new CoverageAnalysisTool()),
 				tuple(opts.toolBuildProject, () => cast(Tool)new BuildProjectTool()),
 				tuple(opts.toolRunTests, () => cast(Tool)new RunTestsTool()),
 				tuple(opts.toolRunProject, () => cast(Tool)new RunProjectTool()),
@@ -382,7 +387,7 @@ void printHelp()
 	writeln("  --dscanner=JSON              Run dscanner analysis");
 	writeln("  --dfmt=JSON                  Run dfmt formatter");
 	writeln("  --compile-check=JSON         Run compile checker");
-	writeln("  --coverage-analysis=JSON     Run coverage analysis");
+	writeln("  --coverage-analysis=FILE     Analyze a .lst coverage file");
 	writeln("  --build-project=JSON         Run dub build");
 	writeln("  --run-tests=JSON             Run dub test");
 	writeln("  --run-project=JSON           Run dub project");

@@ -271,6 +271,9 @@ Every MCP tool can be invoked directly from the command line. Pass a JSON string
 
 # Fetch a dub package
 ./bin/dlang_mcp --fetch-package='{"package_name":"silly"}'
+
+# Analyze coverage (just pass the .lst file)
+./bin/dlang_mcp --coverage-analysis=source-app.lst
 ```
 
 All 19 tool flags:
@@ -280,7 +283,7 @@ All 19 tool flags:
 | `--dscanner=JSON` | Static analysis |
 | `--dfmt=JSON` | Code formatting |
 | `--compile-check=JSON` | Compile checking |
-| `--coverage-analysis=JSON` | Coverage analysis |
+| `--coverage-analysis=FILE` | Coverage analysis (pass a `.lst` file directly) |
 | `--build-project=JSON` | Build project |
 | `--run-tests=JSON` | Run tests |
 | `--run-project=JSON` | Run project |
