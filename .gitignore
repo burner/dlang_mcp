@@ -30,3 +30,6 @@ data/
 # Analysis artifacts
 *.txt
 !README.txt
+
+# Git worktrees
+.worktrees/
