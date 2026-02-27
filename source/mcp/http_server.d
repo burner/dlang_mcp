@@ -18,7 +18,7 @@ import mcp.http_transport : SSETransport, StreamableHTTPTransport, HTTPRequest;
 import mcp.protocol : parseRequest, serializeResponse,
 	createParseErrorResponse, ProtocolException;
 import mcp.types : JsonRpcRequest;
-import utils.logging : logInfo, logError;
+import std.logger : info, error;
 import std.json : JSONValue;
 import std.conv : to;
 import std.datetime : dur;
@@ -79,7 +79,7 @@ class MCPHTTPServer {
 		router.get("/health", &handleHealth);
 
 		listenHTTP(settings, router);
-		logInfo("MCP HTTP server listening on " ~ _host ~ ":" ~ _port.to!string);
+		info("MCP HTTP server listening on " ~ _host ~ ":" ~ _port.to!string);
 
 		runApplication();
 	}
@@ -117,7 +117,7 @@ class MCPHTTPServer {
 	 */
 	void handleSSE(HTTPServerRequest req, HTTPServerResponse res)
 	{
-		logInfo("SSE connection established");
+		info("SSE connection established");
 
 		auto session = _transport.createSession();
 		string sessionId = session.sessionId;
@@ -136,21 +136,21 @@ class MCPHTTPServer {
 				try {
 					writer.write(output);
 				} catch(Exception e) {
-					logInfo("SSE connection closed: " ~ e.msg);
+					info("SSE connection closed: " ~ e.msg);
 					break;
 				}
 			} else {
 				try {
 					writer.write(": keepalive\n\n");
 				} catch(Exception e) {
-					logInfo("SSE keepalive failed, connection closed");
+					info("SSE keepalive failed, connection closed");
 					break;
 				}
 			}
 		}
 
 		_transport.removeSession(sessionId);
-		logInfo("SSE session ended: " ~ sessionId);
+		info("SSE session ended: " ~ sessionId);
 	}
 
 	/**
@@ -194,11 +194,11 @@ class MCPHTTPServer {
 			res.headers["Content-Type"] = "application/json";
 			res.writeBody(serializeResponse(response));
 		} catch(ProtocolException e) {
-			logError("Parse error handling message: " ~ e.msg);
+			error("Parse error handling message: " ~ e.msg);
 			res.headers["Content-Type"] = "application/json";
 			res.writeBody(serializeResponse(createParseErrorResponse()));
 		} catch(Exception e) {
-			logError("Error handling message: " ~ e.msg);
+			error("Error handling message: " ~ e.msg);
 			res.statusCode = HTTPStatus.internalServerError;
 			res.headers["Content-Type"] = "application/json";
 			res.writeBody(serializeResponse(createParseErrorResponse()));
@@ -231,11 +231,11 @@ class MCPHTTPServer {
 			res.headers["Content-Type"] = "application/json";
 			res.writeBody(serializeResponse(response));
 		} catch(ProtocolException e) {
-			logError("Parse error handling MCP request: " ~ e.msg);
+			error("Parse error handling MCP request: " ~ e.msg);
 			res.headers["Content-Type"] = "application/json";
 			res.writeBody(serializeResponse(createParseErrorResponse()));
 		} catch(Exception e) {
-			logError("Error handling MCP request: " ~ e.msg);
+			error("Error handling MCP request: " ~ e.msg);
 			res.statusCode = HTTPStatus.internalServerError;
 			res.headers["Content-Type"] = "application/json";
 			res.writeBody(serializeResponse(createParseErrorResponse()));
