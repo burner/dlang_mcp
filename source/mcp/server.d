@@ -18,7 +18,7 @@ import mcp.protocol : parseRequest, serializeResponse, createErrorResponse, crea
 import mcp.transport : StdioTransport, EOFException;
 import mcp.transport_interface : Transport;
 import tools.base : Tool;
-import utils.logging : logInfo, logError, logDebug;
+import std.logger : info, error, trace, LogLevel, globalLogLevel;
 
 /**
  * The MCP server that manages tool registration and handles JSON-RPC requests.
@@ -59,19 +59,19 @@ class MCPServer {
 	 */
 	void start(Transport transport)
 	{
-		logInfo("MCP Server starting");
+		info("MCP Server starting");
 
 		while(true) {
 			try {
 				string message = transport.readMessage();
-				logDebug("Received: " ~ message);
+				trace("Received: " ~ message);
 
 				JsonRpcRequest request;
 				try {
 					request = parseRequest(message);
 				} catch(ProtocolException e) {
 					// Send a JSON-RPC parse/invalid-request error back to the client
-					logError("Parse error: " ~ e.msg);
+					error("Parse error: " ~ e.msg);
 					auto errResponse = createParseErrorResponse();
 					transport.writeMessage(serializeResponse(errResponse));
 					continue;
@@ -86,10 +86,10 @@ class MCPServer {
 				auto response = handleRequest(request);
 				transport.writeMessage(serializeResponse(response));
 			} catch(EOFException e) {
-				logInfo("Client disconnected");
+				info("Client disconnected");
 				break;
 			} catch(Exception e) {
-				logError("Error: " ~ e.msg);
+				error("Error: " ~ e.msg);
 			}
 		}
 	}
@@ -107,10 +107,10 @@ class MCPServer {
 	{
 		switch(request.method) {
 		case "notifications/initialized":
-			logDebug("Client sent notifications/initialized");
+			trace("Client sent notifications/initialized");
 			break;
 		default:
-			logDebug("Unknown notification: " ~ request.method);
+			trace("Unknown notification: " ~ request.method);
 			break;
 		}
 	}
@@ -273,7 +273,7 @@ class MCPServer {
 			response.result = result.toJSON();
 			return response;
 		} catch(Exception e) {
-			logError("Tool execution error: " ~ e.msg);
+			error("Tool execution error: " ~ e.msg);
 			// Return a successful JSON-RPC response with isError: true.
 			// Per MCP spec, tool execution failures should NOT be JSON-RPC errors;
 			// those are reserved for protocol-level issues.
@@ -545,12 +545,10 @@ unittest {
 
 /// tools/call with throwing tool returns isError: true (not JSON-RPC error)
 unittest {
-	import utils.logging : setLogLevel, getLogLevel, LogLevel;
-
-	auto savedLevel = getLogLevel();
-	setLogLevel(LogLevel.silent);
+	auto savedLevel = globalLogLevel;
+	globalLogLevel = LogLevel.off;
 	scope(exit)
-		setLogLevel(savedLevel);
+		globalLogLevel = savedLevel;
 
 	auto server = createTestServer();
 	initTestServer(server);
@@ -562,12 +560,10 @@ unittest {
 
 /// tools/call with throwing tool includes error message in content
 unittest {
-	import utils.logging : setLogLevel, getLogLevel, LogLevel;
-
-	auto savedLevel = getLogLevel();
-	setLogLevel(LogLevel.silent);
+	auto savedLevel = globalLogLevel;
+	globalLogLevel = LogLevel.off;
 	scope(exit)
-		setLogLevel(savedLevel);
+		globalLogLevel = savedLevel;
 
 	auto server = createTestServer();
 	initTestServer(server);
