@@ -17,7 +17,7 @@ import std.array;
 import std.conv;
 import std.math;
 import std.string;
-import utils.logging;
+import std.logger : error;
 
 /** Configuration for a search query. */
 struct SearchOptions {
@@ -52,8 +52,7 @@ struct ScoredResult {
  */
 private string escapeFTS5Query(string query)
 {
-	auto terms = query.strip().split()
-		.filter!(t => t.length > 0)
+	auto terms = query.strip().split().filter!(t => t.length > 0)
 		.map!(t => `"` ~ t.replace(`"`, `""`) ~ `"`)
 		.array;
 
@@ -210,7 +209,8 @@ class HybridSearch {
 	}
 
 	/** Combine FTS and vector scores into a single rank using configured weights. */
-	private static float combineScores(float ftsScore, float vecScore, float ftsWeight, float vecWeight)
+	private static float combineScores(float ftsScore, float vecScore,
+			float ftsWeight, float vecWeight)
 	{
 		float fts = ftsScore > 0 ? ftsScore : 0.0f;
 		float vec = vecScore > 0 ? vecScore : 0.0f;
@@ -226,7 +226,8 @@ class HybridSearch {
 	}
 
 	/** Merge vector search results into existing combined results map. */
-	private static void mergeVectorResults(ref ScoredResult[long] combinedResults, ScoredResult[] vecResults)
+	private static void mergeVectorResults(ref ScoredResult[long] combinedResults,
+			ScoredResult[] vecResults)
 	{
 		foreach(vr; vecResults) {
 			if(vr.id <= 0)
@@ -271,7 +272,7 @@ class HybridSearch {
 				combinedResults[id] = sr;
 			}
 		} catch(Exception e) {
-			logError("searchPackagesInternal FTS failed: " ~ e.msg);
+			error("searchPackagesInternal FTS failed: " ~ e.msg);
 		}
 
 		if(hasVectorSupport && opts.useVectors) {
@@ -352,7 +353,7 @@ class HybridSearch {
 				combinedResults[id] = sr;
 			}
 		} catch(Exception e) {
-			logError("searchFunctionsInternal FTS failed: " ~ e.msg);
+			error("searchFunctionsInternal FTS failed: " ~ e.msg);
 		}
 
 		// Vector search
@@ -364,7 +365,8 @@ class HybridSearch {
 		// Build final results
 		SearchResult[] results;
 		foreach(id, sr; combinedResults) {
-			float rank = combineScores(sr.ftsScore, sr.vectorScore, opts.ftsWeight, opts.vectorWeight);
+			float rank = combineScores(sr.ftsScore, sr.vectorScore,
+					opts.ftsWeight, opts.vectorWeight);
 
 			if(rank <= 0.0f)
 				continue;
@@ -415,7 +417,7 @@ class HybridSearch {
 				}
 			}
 		} catch(Exception e) {
-			logError("searchFunctionsInternal detail fetch failed: " ~ e.msg);
+			error("searchFunctionsInternal detail fetch failed: " ~ e.msg);
 		}
 
 		return results;
@@ -476,7 +478,7 @@ class HybridSearch {
 				combinedResults[id] = sr;
 			}
 		} catch(Exception e) {
-			logError("searchTypesInternal FTS failed: " ~ e.msg);
+			error("searchTypesInternal FTS failed: " ~ e.msg);
 		}
 
 		// Vector search
@@ -488,7 +490,8 @@ class HybridSearch {
 		// Build final results
 		SearchResult[] results;
 		foreach(id, sr; combinedResults) {
-			float rank = combineScores(sr.ftsScore, sr.vectorScore, opts.ftsWeight, opts.vectorWeight);
+			float rank = combineScores(sr.ftsScore, sr.vectorScore,
+					opts.ftsWeight, opts.vectorWeight);
 
 			if(rank <= 0.0f)
 				continue;
@@ -537,7 +540,7 @@ class HybridSearch {
 				}
 			}
 		} catch(Exception e) {
-			logError("searchTypesInternal detail fetch failed: " ~ e.msg);
+			error("searchTypesInternal detail fetch failed: " ~ e.msg);
 		}
 
 		return results;
@@ -590,7 +593,7 @@ class HybridSearch {
 				combinedResults[id] = sr;
 			}
 		} catch(Exception e) {
-			logError("searchExamplesInternal FTS failed: " ~ e.msg);
+			error("searchExamplesInternal FTS failed: " ~ e.msg);
 		}
 
 		if(hasVectorSupport && opts.useVectors) {
@@ -600,7 +603,8 @@ class HybridSearch {
 
 		SearchResult[] results;
 		foreach(id, sr; combinedResults) {
-			float rank = combineScores(sr.ftsScore, sr.vectorScore, opts.ftsWeight, opts.vectorWeight);
+			float rank = combineScores(sr.ftsScore, sr.vectorScore,
+					opts.ftsWeight, opts.vectorWeight);
 
 			if(rank <= 0.0f)
 				continue;
@@ -649,7 +653,7 @@ class HybridSearch {
 				}
 			}
 		} catch(Exception e) {
-			logError("searchExamplesInternal detail fetch failed: " ~ e.msg);
+			error("searchExamplesInternal detail fetch failed: " ~ e.msg);
 		}
 
 		return results;
@@ -715,7 +719,7 @@ class HybridSearch {
 				results ~= sr;
 			}
 		} catch(Exception e) {
-			logError("searchVectorWithIds on " ~ table ~ " failed: " ~ e.msg);
+			error("searchVectorWithIds on " ~ table ~ " failed: " ~ e.msg);
 		}
 
 		return results;
@@ -731,7 +735,7 @@ class HybridSearch {
 				return result.front["name"].as!string;
 			}
 		} catch(Exception e) {
-			logError("getPackageName failed for id " ~ id.text ~ ": " ~ e.msg);
+			error("getPackageName failed for id " ~ id.text ~ ": " ~ e.msg);
 		}
 		return "";
 	}
@@ -781,7 +785,7 @@ class HybridSearch {
 				imports ~= moduleName;
 			}
 		} catch(Exception e) {
-			logError("getImportsForSymbol failed for " ~ fullyQualifiedName ~ ": " ~ e.msg);
+			error("getImportsForSymbol failed for " ~ fullyQualifiedName ~ ": " ~ e.msg);
 			imports ~= moduleName;
 		}
 
