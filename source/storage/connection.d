@@ -13,7 +13,7 @@ import std.exception;
 import std.file;
 import std.path;
 import std.process : environment;
-import utils.logging : logInfo, logError;
+import std.logger : info, error, LogLevel, globalLogLevel;
 
 /**
  * Manages a SQLite database connection with optimized pragmas and optional vector extension.
@@ -103,11 +103,11 @@ class DBConnection {
 			db.enableLoadExtensions(true);
 			db.loadExtension(vecExtensionPath, "sqlite3_vec_init");
 			vectorSupport = true;
-			logInfo("Loaded sqlite-vec extension: " ~ vecExtensionPath);
+			info("Loaded sqlite-vec extension: " ~ vecExtensionPath);
 		} catch(Exception e) {
-			logError("Failed to load sqlite-vec: " ~ e.msg);
-			logError("  Extension path: " ~ vecExtensionPath);
-			logError("  Vector search will be disabled");
+			error("Failed to load sqlite-vec: " ~ e.msg);
+			error("  Extension path: " ~ vecExtensionPath);
+			error("  Vector search will be disabled");
 		}
 	}
 
@@ -136,7 +136,7 @@ class DBConnection {
 		try {
 			db.execute(sql);
 		} catch(SqliteException e) {
-			logError("SQL Error in: " ~ sql);
+			error("SQL Error in: " ~ sql);
 			throw e;
 		}
 	}
@@ -156,7 +156,7 @@ class DBConnection {
 		try {
 			return db.prepare(sql);
 		} catch(SqliteException e) {
-			logError("SQL Error preparing: " ~ sql);
+			error("SQL Error preparing: " ~ sql);
 			throw e;
 		}
 	}
@@ -237,7 +237,7 @@ struct Transaction {
 			try {
 				conn.rollback();
 			} catch(Exception e) {
-				logError("Error rolling back transaction: " ~ e.msg);
+				error("Error rolling back transaction: " ~ e.msg);
 			}
 		}
 	}
@@ -292,12 +292,11 @@ unittest {
 unittest {
 	import std.format : format;
 	import d2sqlite3 : SqliteException;
-	import utils.logging : setLogLevel, getLogLevel, LogLevel;
 
-	auto savedLevel = getLogLevel();
-	setLogLevel(LogLevel.silent);
+	auto savedLevel = globalLogLevel;
+	globalLogLevel = LogLevel.off;
 	scope(exit)
-		setLogLevel(savedLevel);
+		globalLogLevel = savedLevel;
 
 	auto conn = new DBConnection(":memory:", "");
 	scope(exit)
@@ -315,12 +314,11 @@ unittest {
 /// Test prepare error handling — invalid SQL triggers SqliteException
 unittest {
 	import d2sqlite3 : SqliteException;
-	import utils.logging : setLogLevel, getLogLevel, LogLevel;
 
-	auto savedLevel = getLogLevel();
-	setLogLevel(LogLevel.silent);
+	auto savedLevel = globalLogLevel;
+	globalLogLevel = LogLevel.off;
 	scope(exit)
-		setLogLevel(savedLevel);
+		globalLogLevel = savedLevel;
 
 	auto conn = new DBConnection(":memory:", "");
 	scope(exit)
