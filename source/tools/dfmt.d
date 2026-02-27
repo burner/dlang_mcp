@@ -27,7 +27,7 @@ class DfmtTool : BaseTool {
 
 	@property string description()
 	{
-		return "Format D source code according to style guidelines. Returns formatted code with consistent indentation, spacing, and style.";
+		return "Format D source code to consistent style with configurable brace placement, indentation, and line length. Use when asked to format, prettify, beautify, or fix indentation of D code. Returns the complete reformatted source as text. Does not detect bugs or verify correctness — for linting and static analysis use dscanner; for compilation error checking use compile_check.";
 	}
 
 	@property JSONValue inputSchema()
@@ -37,24 +37,24 @@ class DfmtTool : BaseTool {
             "properties": {
                 "code": {
                     "type": "string",
-                    "description": "D source code to format"
+                    "description": "D source code to format. Required — paste the raw source."
                 },
                 "brace_style": {
                     "type": "string",
                     "enum": ["allman", "otbs", "stroustrup"],
-                    "description": "Brace style to use",
+                    "description": "Brace placement style: allman (default, braces on own line), otbs (opening brace on same line), stroustrup (like otbs but closing brace on own line).",
                     "default": "allman"
                 },
                 "indent_size": {
                     "type": "integer",
-                    "description": "Number of spaces for indentation",
+                    "description": "Spaces per indentation level (1-8, default: 4).",
                     "default": 4,
                     "minimum": 1,
                     "maximum": 8
                 },
                 "max_line_length": {
                     "type": "integer",
-                    "description": "Maximum line length",
+                    "description": "Wrap lines longer than this (default: 120, minimum: 40).",
                     "default": 120,
                     "minimum": 40
                 }

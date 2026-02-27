@@ -32,10 +32,10 @@ class RunProjectTool : BaseTool {
 
 	@property string description()
 	{
-		return "Run a D/dub project. Executes 'dub run' and returns structured results including "
-			~ "success/failure status, compiler errors if build fails, program output, and exit code. "
-			~ "Supports configuration selection, build type, compiler choice, and passing arguments "
-			~ "to the built program.";
+		return "Build and execute a D/dub project, returning its output and exit code. Use when asked "
+			~ "to run, execute, launch, or try a D program. Builds if needed, then runs the binary. "
+			~ "Returns stdout, stderr, exit code, and compiler errors if build fails. Requires "
+			~ "dub.json or dub.sdl. For building without running use build_project; for tests use run_tests.";
 	}
 
 	@property JSONValue inputSchema()
@@ -46,31 +46,31 @@ class RunProjectTool : BaseTool {
                 "project_path": {
                     "type": "string",
                     "default": ".",
-                    "description": "Project root directory (must contain dub.json or dub.sdl)"
+                    "description": "Path to the project root containing dub.json or dub.sdl (default: current directory)."
                 },
                 "compiler": {
                     "type": "string",
                     "enum": ["dmd", "ldc2", "gdc"],
-                    "description": "Which D compiler to use (default: project default)"
+                    "description": "D compiler to use. Defaults to project setting."
                 },
                 "build_type": {
                     "type": "string",
                     "enum": ["debug", "release", "release-debug", "plain"],
-                    "description": "Build type (default: debug)"
+                    "description": "Build type: debug (default), release (optimized), release-debug, plain."
                 },
                 "configuration": {
                     "type": "string",
-                    "description": "Build configuration name"
+                    "description": "Dub build configuration name. Omit to use default."
                 },
                 "args": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Arguments to pass to the built program (after the -- separator)"
+                    "description": "Command-line arguments passed to the program (e.g., [\"--port\", \"8080\"])."
                 },
                 "force": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Force rebuild even if up-to-date"
+                    "description": "Force rebuild before running (default: false)."
                 }
             }
         }`);

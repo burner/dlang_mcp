@@ -28,7 +28,7 @@ class TypeSearchTool : SearchTool {
 
 	@property string description()
 	{
-		return "Search for D types (classes, structs, interfaces, enums) by name or description. Returns matching types with their definitions.";
+		return "Search for D type definitions (classes, structs, interfaces, enums) by name or description across indexed packages. Use when asked 'what type represents X?', 'find a struct for Y', or to discover data structures. Returns matching types with definitions and documentation. Filter by kind to narrow results. For functions use search_functions; for usage examples use search_examples.";
 	}
 
 	@property JSONValue inputSchema()
@@ -38,21 +38,21 @@ class TypeSearchTool : SearchTool {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Search query - type name or description"
+                    "description": "Type name or description (e.g., 'JSONValue', 'hash map', 'Duration', 'socket address')."
                 },
                 "kind": {
                     "type": "string",
                     "enum": ["class", "struct", "interface", "enum"],
-                    "description": "Optional filter for type kind"
+                    "description": "Filter by type kind: class, struct, interface, or enum. Omit to search all kinds."
                 },
                 "package": {
                     "type": "string",
-                    "description": "Optional package name to filter results"
+                    "description": "Restrict to a specific package. Omit to search all indexed packages."
                 },
                 "limit": {
                     "type": "integer",
                     "default": 15,
-                    "description": "Maximum number of results to return"
+                    "description": "Maximum results to return (default: 15)."
                 }
             },
             "required": ["query"]

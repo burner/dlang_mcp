@@ -33,9 +33,11 @@ class DdocAnalyzeTool : BaseTool {
 
 	@property string description()
 	{
-		return "Analyze a D project's documentation and attributes using DMD's JSON output. "
-			~ "Returns per-module function/type summaries, documentation coverage, "
-			~ "and template usage.";
+		return "Analyze documentation coverage and attribute usage across a D project using DMD's JSON "
+			~ "output. Use when asked 'how well documented is this project?', 'what functions lack "
+			~ "docs?', or to audit @safe/@nogc usage. Returns per-module doc coverage percentages, "
+			~ "function/type counts, and template statistics. Requires dub.json or dub.sdl. For "
+			~ "project structure and dependencies use analyze_project; for module APIs use list_project_modules.";
 	}
 
 	@property JSONValue inputSchema()
@@ -46,12 +48,12 @@ class DdocAnalyzeTool : BaseTool {
                 "project_path": {
                     "type": "string",
                     "default": ".",
-                    "description": "Project root directory (must contain dub.json or dub.sdl)"
+                    "description": "Path to the project root containing dub.json or dub.sdl (default: current directory)."
                 },
                 "verbose": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Include per-module function/type details in output"
+                    "description": "Include per-module function/type details (default: false). Enable to see individual symbol documentation status."
                 }
             }
         }`);

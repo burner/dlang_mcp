@@ -30,9 +30,10 @@ class FetchPackageTool : BaseTool {
 
 	@property string description()
 	{
-		return "Fetch a D package from the dub registry. Runs 'dub fetch' to download a specific "
-			~ "package by name, optionally at a specific version. Returns success/failure status "
-			~ "and any output or error messages.";
+		return "Download a D package from the dub registry to the local package cache. Use when asked to "
+			~ "install, download, or fetch a dub package. Returns success/failure status and output "
+			~ "messages. Downloads only — does not add the package to a project's dub.json. To "
+			~ "discover packages by keyword or functionality first, use search_packages.";
 	}
 
 	@property JSONValue inputSchema()
@@ -43,11 +44,11 @@ class FetchPackageTool : BaseTool {
             "properties": {
                 "package_name": {
                     "type": "string",
-                    "description": "Name of the dub package to fetch (e.g. 'vibe-d', 'mir-algorithm')"
+                    "description": "Dub package name to download (e.g., 'vibe-d', 'taggedalgebraic'). Required."
                 },
                 "version_": {
                     "type": "string",
-                    "description": "Specific version to fetch (e.g. '1.0.0', '~>2.0'). If omitted, fetches the latest version."
+                    "description": "Specific version to fetch (e.g., '1.0.0', '~>2.0'). Omit to fetch the latest version."
                 }
             }
         }`);
@@ -133,7 +134,8 @@ unittest {
 	import std.algorithm.searching : canFind;
 
 	auto tool = new FetchPackageTool();
-	assert(tool.description.canFind("dub fetch"), "Description should mention 'dub fetch'");
+	assert(tool.description.canFind("dub") && tool.description.canFind("Download"),
+			"Description should mention downloading from dub registry");
 }
 
 /// FetchPackageTool inputSchema has correct type

@@ -27,9 +27,10 @@ class ImportTool : SearchTool {
 
 	@property string description()
 	{
-		return "Get the required import statements for D symbols (functions, types, modules). "
-			~ "Returns import statements needed to use the specified symbols. "
-			~ "Either 'symbol' or 'symbols' must be provided.";
+		return "Look up the required import statements for D symbols. Use when asked 'what do I import "
+			~ "for X?', 'how to import writeln', or when you know a symbol name but need its module "
+			~ "path. Returns ready-to-paste import lines. Provide a single symbol or a list; fully "
+			~ "qualified names yield more precise results. Use after search_functions or search_types.";
 	}
 
 	@property JSONValue inputSchema()
@@ -41,11 +42,11 @@ class ImportTool : SearchTool {
                 "symbols": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "List of fully qualified symbol names (e.g., std.stdio.writeln, std.algorithm.map)"
+                    "description": "Multiple symbol names to look up at once (e.g., ['std.stdio.writeln', 'std.algorithm.map']). Fully qualified names give more precise results."
                 },
                 "symbol": {
                     "type": "string",
-                    "description": "Single symbol name (alternative to symbols array)"
+                    "description": "A single symbol name to look up (e.g., 'writeln', 'JSONValue', 'map')."
                 }
             }
         }`);

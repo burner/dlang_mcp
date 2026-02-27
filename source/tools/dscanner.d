@@ -55,7 +55,7 @@ class DscannerTool : BaseTool {
 
 	@property string description()
 	{
-		return "Analyze D source code with dscanner. Supports multiple analysis modes: lint (static analysis), syntax check, line counting, import listing, AST generation, and more.";
+		return "Analyze D source code for bugs, style issues, and complexity via static analysis. Use when asked to lint, check code quality, find potential bugs, or list imports in D code. Default mode is lint; also supports syntax (validation only), imports (list dependencies), sloc (line counts), ast (parse tree), and ctags (symbol tags). Returns diagnostics with file, line, and message. For compile-time type errors use compile_check; for code formatting use dfmt.";
 	}
 
 	@property JSONValue inputSchema()
@@ -65,7 +65,7 @@ class DscannerTool : BaseTool {
             "properties": {
                 "code": {
                     "type": "string",
-                    "description": "D source code to analyze"
+                    "description": "D source code to analyze. Required — paste the code directly."
                 },
                 "file_path": {
                     "type": "string",
@@ -75,23 +75,23 @@ class DscannerTool : BaseTool {
                     "type": "string",
                     "enum": ["lint", "syntax", "sloc", "tokenCount", "imports", "recursiveImports", "ctags", "ast", "declaration", "highlight", "report"],
                     "default": "lint",
-                    "description": "Analysis mode"
+                    "description": "Analysis mode: lint (default) finds bugs/style issues; syntax validates grammar; imports lists dependencies; sloc counts lines; ast shows parse tree. Use lint for most code review tasks."
                 },
                 "preset": {
                     "type": "string",
                     "enum": ["default", "strict", "minimal", "custom"],
                     "default": "default",
-                    "description": "Check preset for lint/syntax modes"
+                    "description": "Strictness level for lint/syntax: default (balanced), strict (all checks enabled), minimal (critical issues only)."
                 },
                 "symbol": {
                     "type": "string",
-                    "description": "Symbol name to find declaration (only for declaration mode)"
+                    "description": "Symbol name to find its declaration (only used in declaration mode)."
                 },
                 "errorFormat": {
                     "type": "string",
                     "enum": ["github", "pretty", "plain"],
                     "default": "plain",
-                    "description": "Output format for errors"
+                    "description": "Output format for diagnostics: plain (default), pretty (human-readable), github (GitHub Actions annotations)."
                 },
                 "config": {
                     "type": "string",
@@ -100,12 +100,12 @@ class DscannerTool : BaseTool {
                 "skipTests": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Skip analyzing code in unittests"
+                    "description": "Skip analyzing code inside unittest blocks (default: false)."
                 },
                 "importPaths": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Directories to search for imports"
+                    "description": "Additional directories to search for imports when resolving dependencies."
                 }
             },
             "required": ["code"]

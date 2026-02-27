@@ -36,21 +36,23 @@ JSONValue detectFeatures()
 
 	// --- sqlite-vec extension ---
 	bool vecLoaded = false;
-	if (dbAvailable) {
+	if(dbAvailable) {
 		try {
 			import storage.connection : DBConnection;
 
 			auto conn = new DBConnection(DB_PATH);
-			scope(exit) conn.close();
+			scope(exit)
+				conn.close();
 			vecLoaded = conn.hasVectorSupport();
-		} catch (Exception) {
+		} catch(Exception) {
 		}
 	}
 	{
 		JSONValue ext;
 		JSONValue vec;
 		vec["available"] = JSONValue(vecLoaded);
-		vec["detail"] = JSONValue(vecLoaded ? "loaded" : (dbAvailable ? "not loaded" : "database not available to test"));
+		vec["detail"] = JSONValue(vecLoaded ? "loaded" : (dbAvailable
+				? "not loaded" : "database not available to test"));
 		ext["sqlite_vec"] = vec;
 		status["extensions"] = ext;
 	}
@@ -65,20 +67,21 @@ JSONValue detectFeatures()
 	bool tfidfVocabExists = exists(TFIDF_VOCAB_PATH);
 
 	bool onnxRuntimeAvailable = false;
-	if (onnxModelExists) {
+	if(onnxModelExists) {
 		try {
 			import bindbc.onnxruntime;
+
 			auto support = loadONNXRuntime();
 			onnxRuntimeAvailable = (support != ONNXRuntimeSupport.noLibrary
 					&& support != ONNXRuntimeSupport.badLibrary);
-		} catch (Exception) {
+		} catch(Exception) {
 		}
 	}
 
 	string activeEngine;
-	if (onnxRuntimeAvailable && onnxModelExists)
+	if(onnxRuntimeAvailable && onnxModelExists)
 		activeEngine = "ONNX (all-MiniLM-L6-v2)";
-	else if (tfidfVocabExists)
+	else if(tfidfVocabExists)
 		activeEngine = "TF-IDF";
 	else
 		activeEngine = "TF-IDF (untrained)";
@@ -120,9 +123,9 @@ JSONValue detectFeatures()
 	// --- Search mode ---
 	{
 		string mode;
-		if (!dbAvailable)
+		if(!dbAvailable)
 			mode = "unavailable";
-		else if (vecLoaded)
+		else if(vecLoaded)
 			mode = "hybrid";
 		else
 			mode = "text_only";
@@ -141,40 +144,40 @@ JSONValue buildFeatureStatusSummary(JSONValue fullStatus)
 	JSONValue summary;
 
 	// database
-	if ("database" in fullStatus) {
+	if("database" in fullStatus) {
 		auto db = fullStatus["database"];
 		summary["database"] = db["available"];
 	}
 
 	// sqlite_vec
-	if ("extensions" in fullStatus && "sqlite_vec" in fullStatus["extensions"]) {
+	if("extensions" in fullStatus && "sqlite_vec" in fullStatus["extensions"]) {
 		summary["sqlite_vec"] = fullStatus["extensions"]["sqlite_vec"]["available"];
 	}
 
 	// embeddings
-	if ("embeddings" in fullStatus) {
+	if("embeddings" in fullStatus) {
 		auto emb = fullStatus["embeddings"];
-		if ("onnx_runtime" in emb)
+		if("onnx_runtime" in emb)
 			summary["onnx_runtime"] = emb["onnx_runtime"]["available"];
-		if ("onnx_model" in emb)
+		if("onnx_model" in emb)
 			summary["onnx_model"] = emb["onnx_model"]["available"];
-		if ("tfidf_vocabulary" in emb)
+		if("tfidf_vocabulary" in emb)
 			summary["tfidf_vocabulary"] = emb["tfidf_vocabulary"]["available"];
-		if ("active_engine" in emb)
+		if("active_engine" in emb)
 			summary["active_embedding_engine"] = emb["active_engine"];
 	}
 
 	// search_mode
-	if ("search_mode" in fullStatus) {
+	if("search_mode" in fullStatus) {
 		summary["search_mode"] = fullStatus["search_mode"];
 	}
 
 	// external tools
-	if ("external_tools" in fullStatus) {
+	if("external_tools" in fullStatus) {
 		auto ext = fullStatus["external_tools"];
-		if ("dscanner" in ext)
+		if("dscanner" in ext)
 			summary["dscanner"] = ext["dscanner"]["available"];
-		if ("dfmt" in ext)
+		if("dfmt" in ext)
 			summary["dfmt"] = ext["dfmt"]["available"];
 	}
 
@@ -186,16 +189,16 @@ private JSONValue probeExternalTool(string[] command)
 	JSONValue info;
 	try {
 		auto result = execute(command);
-		if (result.status == 0) {
+		if(result.status == 0) {
 			auto output = result.output.strip();
 			string firstLine = "";
-			if (output.length > 0) {
-				foreach (line; output.splitter('\n')) {
+			if(output.length > 0) {
+				foreach(line; output.splitter('\n')) {
 					firstLine = line;
 					break;
 				}
 			}
-			if (firstLine.length > 80)
+			if(firstLine.length > 80)
 				firstLine = firstLine[0 .. 80] ~ "...";
 			info["available"] = JSONValue(true);
 			info["version"] = JSONValue(firstLine);
@@ -203,7 +206,7 @@ private JSONValue probeExternalTool(string[] command)
 			info["available"] = JSONValue(false);
 			info["detail"] = JSONValue("found but returned error");
 		}
-	} catch (Exception) {
+	} catch(Exception) {
 		info["available"] = JSONValue(false);
 		info["detail"] = JSONValue("not found in PATH");
 	}
@@ -225,7 +228,7 @@ class FeatureStatusTool : BaseTool {
 
 	@property string description()
 	{
-		return "Check which runtime features are enabled (database, ONNX embeddings, sqlite-vec, external tools, search mode). Returns a structured JSON report of all feature availability.";
+		return "Check which optional runtime features are available in this server instance. Use when diagnosing tool failures, asked 'is ONNX available?', or 'what features are enabled?'. Returns JSON with database, ONNX embeddings, sqlite-vec, external tool, and search mode availability. No parameters needed. Call this first when search or analysis tools return unexpected results.";
 	}
 
 	@property JSONValue inputSchema()
@@ -242,7 +245,7 @@ class FeatureStatusTool : BaseTool {
 		try {
 			auto status = detectFeatures();
 			return createTextResult(status.toPrettyString());
-		} catch (Exception e) {
+		} catch(Exception e) {
 			return createErrorResult("Feature detection failed: " ~ e.msg);
 		}
 	}

@@ -33,9 +33,11 @@ class RunTestsTool : BaseTool {
 
 	@property string description()
 	{
-		return "Run tests for a D/dub project. Executes 'dub test' and returns structured results "
-			~ "including pass/fail status, test output, compiler errors if build fails, and summary. "
-			~ "Supports configuration selection, compiler choice, and verbose mode.";
+		return "Run unit tests for a D/dub project and report results. Use when asked to test, run "
+			~ "tests, check if tests pass, or verify changes didn't break anything. Returns pass/fail "
+			~ "count, test output, and compiler errors if build fails. Requires dub.json or dub.sdl. "
+			~ "Use after build_project to verify correctness. For coverage analysis, build with "
+			~ "dmd -cov first then use coverage_analysis on the .lst output.";
 	}
 
 	@property JSONValue inputSchema()
@@ -46,25 +48,25 @@ class RunTestsTool : BaseTool {
                 "project_path": {
                     "type": "string",
                     "default": ".",
-                    "description": "Project root directory (must contain dub.json or dub.sdl)"
+                    "description": "Path to the project root containing dub.json or dub.sdl (default: current directory)."
                 },
                 "compiler": {
                     "type": "string",
                     "enum": ["dmd", "ldc2", "gdc"],
-                    "description": "Which D compiler to use (default: project default)"
+                    "description": "D compiler to use. Defaults to project setting."
                 },
                 "configuration": {
                     "type": "string",
-                    "description": "Build configuration name"
+                    "description": "Dub build configuration name. Omit to use default."
                 },
                 "verbose": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Show verbose test output"
+                    "description": "Show detailed per-test output (default: false). Enable when debugging test failures."
                 },
                 "filter": {
                     "type": "string",
-                    "description": "Unit test name filter (only run matching tests)"
+                    "description": "Only run unit tests whose names match this string. Use to isolate specific failing tests."
                 }
             }
         }`);

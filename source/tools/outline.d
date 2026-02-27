@@ -36,12 +36,12 @@ class ModuleOutlineTool : BaseTool {
 
 	@property string description()
 	{
-		return "Get a structured outline of all symbols in a D source file. Returns hierarchical "
-			~ "symbol information including: name, kind (class/struct/function/variable/enum/"
-			~ "interface/constructor/template), line number, visibility (public/private/protected), "
-			~ "attributes (@safe, @nogc, nothrow, pure, @trusted, const), return type, parameters, "
-			~ "template parameters, and documentation comments (ddoc). Children are nested. "
-			~ "Either 'file_path' or 'code' must be provided.";
+		return "Retrieve a hierarchical outline of all symbols in a single D source file or code snippet. "
+			~ "Use when asked 'what's in this file?', 'show me the structure', or 'list functions in "
+			~ "this module'. Returns nested JSON with each symbol's name, kind, line number, visibility, "
+			~ "attributes (@safe, @nogc, nothrow, pure), return type, parameters, and ddoc comments. "
+			~ "Provide either a file path or inline code. For project-wide symbol search use "
+			~ "ctags_search; for all modules use list_project_modules.";
 	}
 
 	@property JSONValue inputSchema()
@@ -52,16 +52,16 @@ class ModuleOutlineTool : BaseTool {
 			"properties": {
 				"file_path": {
 					"type": "string",
-					"description": "Path to the D source file to analyze"
+					"description": "Path to a .d source file to outline. Use for files on disk."
 				},
 				"code": {
 					"type": "string",
-					"description": "D source code to analyze (alternative to file_path)"
+					"description": "D source code to outline (alternative to file_path). Use for inline snippets."
 				},
 				"include_private": {
 					"type": "boolean",
 					"default": true,
-					"description": "Include private symbols in the outline"
+					"description": "Include private and protected symbols (default: true). Set false to see only the public API."
 				}
 			}
 		}`);

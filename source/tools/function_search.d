@@ -27,7 +27,7 @@ class FunctionSearchTool : SearchTool {
 
 	@property string description()
 	{
-		return "Search for D functions by name, signature, documentation, or functionality. Returns matching functions with signatures and usage information.";
+		return "Search for D function definitions by name, signature, or description across indexed packages. Use when asked 'how do I sort in D?', 'find a function that parses JSON', or 'what does writeln do?'. Returns signatures, documentation, and package origin. For types use search_types; for code examples use search_examples; for import statements use get_imports.";
 	}
 
 	@property JSONValue inputSchema()
@@ -37,16 +37,16 @@ class FunctionSearchTool : SearchTool {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Search query - function name, signature, or functionality description"
+                    "description": "Function name, signature fragment, or description (e.g., 'sort', 'parse JSON', 'writeln', 'map filter')."
                 },
                 "package": {
                     "type": "string",
-                    "description": "Optional package name to filter results"
+                    "description": "Restrict search to a specific package (e.g., 'std', 'vibe-d'). Omit to search all indexed packages."
                 },
                 "limit": {
                     "type": "integer",
                     "default": 20,
-                    "description": "Maximum number of results to return"
+                    "description": "Maximum results to return (default: 20)."
                 }
             },
             "required": ["query"]

@@ -27,7 +27,7 @@ class PackageSearchTool : SearchTool {
 
 	@property string description()
 	{
-		return "Search for D packages by name, description, or tags. Returns matching packages with descriptions and metadata.";
+		return "Search the indexed D package database by name, description, or tags. Use when asked 'is there a D library for X?' or to discover packages by keyword. Returns matching packages with names, descriptions, and metadata. Searches the local index, not the live registry. For function-level search use search_functions; to download a found package use fetch_package.";
 	}
 
 	@property JSONValue inputSchema()
@@ -37,12 +37,12 @@ class PackageSearchTool : SearchTool {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Search query - package name, description keywords, or tags"
+                    "description": "Search terms — package name, keywords, or tags (e.g., 'json parser', 'http client', 'allocator')."
                 },
                 "limit": {
                     "type": "integer",
                     "default": 10,
-                    "description": "Maximum number of results to return"
+                    "description": "Maximum results to return (default: 10). Increase for broader searches."
                 }
             },
             "required": ["query"]
@@ -93,9 +93,7 @@ unittest {
 unittest {
 	auto tool = new PackageSearchTool();
 	assert(tool.description.length > 0, "Description should not be empty");
-	assert(tool.description == "Search for D packages by name, description, or tags. "
-			~ "Returns matching packages with descriptions and metadata.",
-			format("Unexpected description: '%s'", tool.description));
+	assert(tool.description.length > 50, format("Description too short: '%s'", tool.description));
 }
 
 /// PackageSearchTool schema has correct type and properties

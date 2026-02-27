@@ -35,7 +35,7 @@ class CtagsSearchTool : BaseTool {
 
 	@property string description()
 	{
-		return "Search for symbol definitions across the project using ctags. Automatically generates or regenerates the tags file when needed (if missing or outdated).";
+		return "Search for symbol definitions (functions, classes, structs, enums) by name across a D project. Use when asked 'where is X defined?', 'find the definition of Y', or 'locate this symbol'. Returns matching symbols with file paths and line numbers. Supports exact, prefix, and regex matching with optional kind filtering. Auto-generates tags when needed. For a full single-module outline use get_module_outline; for listing all project modules use list_project_modules.";
 	}
 
 	@property JSONValue inputSchema()
@@ -45,27 +45,27 @@ class CtagsSearchTool : BaseTool {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Symbol name to search for"
+                    "description": "Symbol name to search for (e.g., 'parseJSON', 'MCPServer', 'ToolResult')."
                 },
                 "project_path": {
                     "type": "string",
                     "default": ".",
-                    "description": "Project root directory"
+                    "description": "Path to the project root (default: current directory)."
                 },
                 "match_type": {
                     "type": "string",
                     "enum": ["exact", "prefix", "regex"],
                     "default": "exact",
-                    "description": "Match type: exact (equality), prefix (starts with), or regex pattern"
+                    "description": "How to match: exact (default, full name equality), prefix (starts with query), regex (pattern). Use prefix for partial name searches."
                 },
                 "kind": {
                     "type": "string",
-                    "description": "Filter by symbol kind: f=function, c=class, s=struct, g=enum, i=interface, v=variable, e=enum member"
+                    "description": "Filter by kind: f=function, c=class, s=struct, g=enum, i=interface, v=variable, e=enum member. Omit to search all."
                 },
                 "source_dirs": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Source directories to scan (relative to project_path). Auto-detected from dub config or defaults to ['source', 'src']."
+                    "description": "Source directories to scan, relative to project_path (e.g., ['source', 'src']). Auto-detected from dub config if omitted."
                 }
             },
             "required": ["query"]

@@ -31,10 +31,11 @@ class UpgradeDependenciesTool : BaseTool {
 
 	@property string description()
 	{
-		return "Upgrade dependencies for a D/dub project. Runs 'dub upgrade' to update project "
-			~ "dependencies to their latest allowed versions. Supports missing-only mode (only "
-			~ "fetch missing dependencies) and verify mode (check consistency without upgrading). "
-			~ "Returns structured results with upgrade details.";
+		return "Upgrade or verify dependencies for a D/dub project. Use when asked to update packages, "
+			~ "fix missing dependencies, or check dependency consistency. Returns which packages were "
+			~ "updated and to what versions. Requires dub.json or dub.sdl. Use missing_only=true after "
+			~ "cloning to fetch without upgrading; verify=true to check without modifying. For "
+			~ "downloading individual packages use fetch_package.";
 	}
 
 	@property JSONValue inputSchema()
@@ -45,17 +46,17 @@ class UpgradeDependenciesTool : BaseTool {
                 "project_path": {
                     "type": "string",
                     "default": ".",
-                    "description": "Project root directory (must contain dub.json or dub.sdl)"
+                    "description": "Path to the project root containing dub.json or dub.sdl (default: current directory)."
                 },
                 "missing_only": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Only fetch dependencies that are missing locally, do not upgrade existing ones"
+                    "description": "Only download dependencies not yet cached — do not upgrade existing ones (default: false). Use after cloning a fresh repo."
                 },
                 "verify": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Check dependency consistency without actually upgrading"
+                    "description": "Check dependency version consistency without modifying anything (default: false). Use for CI or auditing."
                 }
             }
         }`);
@@ -183,7 +184,8 @@ unittest {
 	import std.algorithm.searching : canFind;
 
 	auto tool = new UpgradeDependenciesTool();
-	assert(tool.description.canFind("dub upgrade"), "Description should mention 'dub upgrade'");
+	assert(tool.description.canFind("Upgrade") && tool.description.canFind("dependencies"),
+			"Description should mention upgrading dependencies");
 }
 
 /// inputSchema has correct type and all expected properties

@@ -31,10 +31,12 @@ class CompileCheckTool : BaseTool {
 
 	@property string description()
 	{
-		return "Compile-check D source code without linking. Runs dmd or ldc2 with -c flag to "
-			~ "detect type errors, syntax errors, undefined identifiers, and other compile-time "
-			~ "issues. Returns structured error/warning list with file, line, column, and message. "
-			~ "Accepts either inline code or a file path. Either 'code' or 'file_path' must be provided.";
+		return "Compile-check D code for type errors, undefined identifiers, and syntax errors without "
+			~ "linking or running. Use when asked 'does this compile?', 'check for errors', or "
+			~ "'what's wrong with this code?'. Returns a structured list of errors and warnings with "
+			~ "file, line, column, and message. Provide either inline code or a file path. Set "
+			~ "dub_project for automatic import path detection. For a full project build use "
+			~ "build_project; for style issues use dscanner.";
 	}
 
 	@property JSONValue inputSchema()
@@ -45,36 +47,36 @@ class CompileCheckTool : BaseTool {
             "properties": {
                 "code": {
                     "type": "string",
-                    "description": "D source code to compile-check"
+                    "description": "D source code to check (alternative to file_path). Paste code directly for quick checks."
                 },
                 "file_path": {
                     "type": "string",
-                    "description": "Path to a D source file to compile-check (alternative to code)"
+                    "description": "Path to a .d source file to check (alternative to code). Use for files already on disk."
                 },
                 "compiler": {
                     "type": "string",
                     "enum": ["dmd", "ldc2", "gdc"],
                     "default": "dmd",
-                    "description": "Which D compiler to use"
+                    "description": "D compiler: dmd (default, faster compilation), ldc2 (stricter warnings), gdc."
                 },
                 "import_paths": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Additional import paths (-I flags)"
+                    "description": "Additional import search directories (-I flags). Usually unnecessary if dub_project is set."
                 },
                 "string_imports": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "String import paths (-J flags)"
+                    "description": "String import directories (-J flags). Needed for import(\"file\") expressions."
                 },
                 "versions": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Version identifiers to define (-version=X)"
+                    "description": "Version identifiers to define (e.g., 'Have_vibe_d'). Usually unnecessary if dub_project is set."
                 },
                 "dub_project": {
                     "type": "string",
-                    "description": "Path to a dub project. If provided, import paths and versions are auto-detected from dub describe"
+                    "description": "Path to a dub project root. When set, import paths and versions are auto-detected from dub.json/dub.sdl — avoids manual import_paths/versions setup."
                 }
             }
         }`);

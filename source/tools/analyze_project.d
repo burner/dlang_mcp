@@ -33,9 +33,11 @@ class AnalyzeProjectTool : BaseTool {
 
 	@property string description()
 	{
-		return "Analyze a D project's structure. Returns project name, dependencies, source files, "
-			~ "import paths, build configuration, and module list. Uses 'dub describe' for accurate "
-			~ "information, with fallback to parsing dub.json directly.";
+		return "Analyze a D/dub project's build configuration and dependency tree. Use when asked 'what "
+			~ "dependencies does this project have?', 'show project config', or to understand the "
+			~ "build setup. Returns project name, dependency versions, source files, import paths, and "
+			~ "build settings. Uses dub describe with fallback to direct file parsing. For listing "
+			~ "modules and APIs use list_project_modules; for documentation coverage use ddoc_analyze.";
 	}
 
 	@property JSONValue inputSchema()
@@ -46,7 +48,7 @@ class AnalyzeProjectTool : BaseTool {
                 "project_path": {
                     "type": "string",
                     "default": ".",
-                    "description": "Project root directory"
+                    "description": "Path to the project root containing dub.json or dub.sdl (default: current directory)."
                 }
             }
         }`);

@@ -35,10 +35,11 @@ class ListProjectModulesTool : BaseTool {
 
 	@property string description()
 	{
-		return "List all modules in a D project with a summary of their public API. "
-			~ "For each module, shows the file path, module name, and public symbols "
-			~ "(functions, classes, structs, enums, interfaces) with their kinds and signatures. "
-			~ "Uses dscanner ctags for fast symbol extraction.";
+		return "List all modules in a D project with their public API summaries. Use when asked 'what "
+			~ "modules are in this project?', 'show the project structure', or to get a high-level "
+			~ "overview of available functionality. Returns each module's file path, name, and public "
+			~ "symbols (functions, classes, structs, enums) with signatures. For detailed single-module "
+			~ "analysis use get_module_outline; for searching a specific symbol by name use ctags_search.";
 	}
 
 	@property JSONValue inputSchema()
@@ -49,12 +50,12 @@ class ListProjectModulesTool : BaseTool {
                 "project_path": {
                     "type": "string",
                     "default": ".",
-                    "description": "Project root directory"
+                    "description": "Path to the project root (default: current directory). Must contain a source/ or src/ directory."
                 },
                 "include_private": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Include private/protected symbols in the output"
+                    "description": "Include private/protected symbols (default: false). Enable to see the full internal API."
                 }
             }
         }`);

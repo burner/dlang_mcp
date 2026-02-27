@@ -27,7 +27,7 @@ class ExampleSearchTool : SearchTool {
 
 	@property string description()
 	{
-		return "Search for D code examples by description or code content. Returns runnable code examples with import requirements.";
+		return "Search for runnable D code examples by description or code pattern. Use when asked 'show me how to X in D', 'example of Y', or when the user needs working sample code. Returns complete, runnable snippets with required import statements. Best used after search_functions or search_types to see practical API usage. For API signatures without examples use search_functions.";
 	}
 
 	@property JSONValue inputSchema()
@@ -37,16 +37,16 @@ class ExampleSearchTool : SearchTool {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Search query - example description or code functionality"
+                    "description": "Description of what the example should demonstrate (e.g., 'read a file line by line', 'HTTP GET request', 'regex matching')."
                 },
                 "package": {
                     "type": "string",
-                    "description": "Optional package name to filter results"
+                    "description": "Restrict to examples from a specific package. Omit to search all indexed packages."
                 },
                 "limit": {
                     "type": "integer",
                     "default": 10,
-                    "description": "Maximum number of results to return"
+                    "description": "Maximum results to return (default: 10)."
                 }
             },
             "required": ["query"]

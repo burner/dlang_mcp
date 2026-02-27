@@ -29,9 +29,10 @@ class BuildProjectTool : BaseTool {
 
 	@property string description()
 	{
-		return "Build a D/dub project. Runs 'dub build' and returns structured results including "
-			~ "success/failure status, compiler errors with file/line/message, and build output. "
-			~ "Supports configuration selection, build type, compiler choice, and force rebuild.";
+		return "Build a D/dub project and report compilation results. Use when asked to build, compile, "
+			~ "or check if a project compiles successfully. Returns success/failure, compiler errors "
+			~ "with file/line/message, and warnings. Requires dub.json or dub.sdl. For single-file "
+			~ "checks use compile_check. After building, use run_project to execute or run_tests to verify.";
 	}
 
 	@property JSONValue inputSchema()
@@ -42,26 +43,26 @@ class BuildProjectTool : BaseTool {
                 "project_path": {
                     "type": "string",
                     "default": ".",
-                    "description": "Project root directory (must contain dub.json or dub.sdl)"
+                    "description": "Path to the project root containing dub.json or dub.sdl (default: current directory)."
                 },
                 "compiler": {
                     "type": "string",
                     "enum": ["dmd", "ldc2", "gdc"],
-                    "description": "Which D compiler to use (default: project default)"
+                    "description": "D compiler: dmd (fast compilation), ldc2 (optimized output), gdc. Defaults to project setting."
                 },
                 "build_type": {
                     "type": "string",
                     "enum": ["debug", "release", "release-debug", "plain"],
-                    "description": "Build type (default: debug)"
+                    "description": "Build type: debug (default, with assertions), release (optimized, no bounds checks), release-debug, plain."
                 },
                 "configuration": {
                     "type": "string",
-                    "description": "Build configuration name"
+                    "description": "Dub build configuration name (e.g., 'library', 'unittest'). Omit to use default."
                 },
                 "force": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Force rebuild even if up-to-date"
+                    "description": "Force full rebuild even if targets are up-to-date (default: false). Use when builds seem stale."
                 }
             }
         }`);

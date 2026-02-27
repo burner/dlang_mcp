@@ -19,10 +19,11 @@ class CoverageAnalysisTool : BaseTool {
 
 	override @property string description()
 	{
-		return "Analyze D code coverage from .lst files. Parses coverage files "
-			~ "produced by `dmd -cov` or `ldc2 --cov`, identifies functions "
-			~ "with uncovered lines, and reports per-function coverage "
-			~ "statistics sorted by number of uncovered lines.";
+		return "Analyze D code coverage from .lst files produced by dmd -cov or ldc2 --cov. Use when "
+			~ "asked 'what code isn't tested?', 'show coverage gaps', or 'which functions need more "
+			~ "tests?'. Returns per-function coverage statistics sorted by most uncovered lines first. "
+			~ "Provide a single .lst file or a directory to scan all .lst files. Run run_tests with "
+			~ "coverage flags first to generate .lst files.";
 	}
 
 	override @property JSONValue inputSchema()
@@ -32,16 +33,17 @@ class CoverageAnalysisTool : BaseTool {
 			"properties": JSONValue([
 				"file_path": JSONValue([
 					"type": JSONValue("string"),
-					"description": JSONValue("Path to a single .lst coverage file")
+					"description": JSONValue(
+							"Path to a single .lst coverage file (e.g., 'source-app.lst'). Use for analyzing one module.")
 				]),
 				"directory": JSONValue([
 					"type": JSONValue("string"),
-					"description": JSONValue("Directory to scan for .lst coverage files")
+					"description": JSONValue(
+							"Directory to scan for all .lst files (e.g., '.'). Use for project-wide coverage analysis.")
 				]),
 				"min_uncovered": JSONValue([
 					"type": JSONValue("integer"),
-					"description": JSONValue(
-							"Only show functions with at least this many " ~ "uncovered lines (default: 1)"),
+					"description": JSONValue("Minimum uncovered lines to include a function in results (default: 1). Increase to focus on biggest gaps."),
 					"default": JSONValue(1)
 				])
 			])
