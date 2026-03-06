@@ -6,9 +6,11 @@
  */
 module utils.coverage_parser;
 
+import std.algorithm.searching : count;
 import std.array : appender;
 import std.conv : to, ConvException;
-import std.string : indexOf, strip, replace;
+import std.path : baseName, stripExtension;
+import std.string : indexOf, splitLines, strip, replace;
 
 /**
  * Per-line coverage information extracted from a `.lst` file.
@@ -42,31 +44,19 @@ struct FileCoverage {
 	/// Number of executable lines that were never executed.
 	size_t uncoveredCount() const
 	{
-		size_t count;
-		foreach(ref line; lines)
-			if(line.isExecutable && !line.isCovered)
-				count++;
-		return count;
+		return lines[].count!(l => l.isExecutable && !l.isCovered);
 	}
 
 	/// Total number of executable lines.
 	size_t executableCount() const
 	{
-		size_t count;
-		foreach(ref line; lines)
-			if(line.isExecutable)
-				count++;
-		return count;
+		return lines[].count!(l => l.isExecutable);
 	}
 
 	/// Number of executable lines that were executed at least once.
 	size_t coveredCount() const
 	{
-		size_t count;
-		foreach(ref line; lines)
-			if(line.isExecutable && line.isCovered)
-				count++;
-		return count;
+		return lines[].count!(l => l.isExecutable && l.isCovered);
 	}
 }
 
@@ -89,25 +79,9 @@ string inferSourceFileName(string lstPath)
 	if(lstPath.length == 0)
 		return "";
 
-	// Strip directory prefix — take only the base name.
-	string base = lstPath;
-	auto lastSlash = base.indexOf('/');
-	// Find the very last slash.
-	while(lastSlash >= 0) {
-		base = base[lastSlash + 1 .. $];
-		lastSlash = base.indexOf('/');
-	}
-
-	// Also handle backslash paths.
-	auto lastBack = base.indexOf('\\');
-	while(lastBack >= 0) {
-		base = base[lastBack + 1 .. $];
-		lastBack = base.indexOf('\\');
-	}
-
-	// Strip .lst extension.
-	if(base.length > 4 && base[$ - 4 .. $] == ".lst")
-		base = base[0 .. $ - 4];
+	// Normalize backslash paths for cross-platform support,
+	// then strip directory prefix and .lst extension using std.path.
+	string base = lstPath.replace("\\", "/").baseName.stripExtension;
 
 	// Replace `-` with `/` and append `.d`.
 	return base.replace("-", "/") ~ ".d";
@@ -146,7 +120,7 @@ FileCoverage parseLstContent(string content, string filePath = "")
 	auto sourceBuilder = appender!string();
 	size_t lineNum;
 
-	// Split content into lines, preserving empty trailing lines.
+	// Split content into lines.
 	auto rawLines = splitLines(content);
 
 	foreach(rawLine; rawLines) {
@@ -187,36 +161,6 @@ FileCoverage parseLstContent(string content, string filePath = "")
 
 	result.reconstructedSource = sourceBuilder[];
 	return result;
-}
-
-/**
- * Split a string into lines, handling `\n`, `\r\n`, and `\r` line endings.
- *
- * Params:
- *     s = The string to split.
- *
- * Returns:
- *     An array of lines without their terminators.
- */
-private string[] splitLines(string s)
-{
-	string[] lines;
-	size_t start;
-	for(size_t i = 0; i < s.length; i++) {
-		if(s[i] == '\n') {
-			lines ~= s[start .. i];
-			start = i + 1;
-		} else if(s[i] == '\r') {
-			lines ~= s[start .. i];
-			if(i + 1 < s.length && s[i + 1] == '\n')
-				i++;
-			start = i + 1;
-		}
-	}
-	// Remaining content after the last newline.
-	if(start <= s.length)
-		lines ~= s[start .. $];
-	return lines;
 }
 
 // ---------------------------------------------------------------------------

@@ -303,14 +303,7 @@ class IngestionPipeline {
 		try {
 			auto unittests = extractUnittestBlocks(filePath, packageName);
 
-			string moduleName;
-			auto parts = filePath.split("/");
-			if(parts.length > 0) {
-				auto fileName = parts[$ - 1].replace(".d", "");
-				moduleName = packageName ~ "." ~ fileName;
-			} else {
-				moduleName = packageName;
-			}
+			string moduleName = packageName ~ "." ~ baseName(filePath).stripExtension;
 
 			long modId = crud.insertModule(pkgId, ModuleDoc(moduleName, packageName, "", [
 			], []));

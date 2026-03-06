@@ -149,11 +149,9 @@ class CompileCheckTool : BaseTool {
 
 				string uuid = randomUUID().toString();
 				// Remove hyphens from UUID so the filename is a valid D identifier
-				string cleanId;
-				foreach(c; uuid) {
-					if(c != '-')
-						cleanId ~= c;
-				}
+				import std.string : replace;
+
+				string cleanId = uuid.replace("-", "");
 				tempPath = buildPath(tempDir, "dcheck_" ~ cleanId ~ ".d");
 				write(tempPath, code);
 				scope(exit) {

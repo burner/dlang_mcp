@@ -4,10 +4,12 @@
 module utils.ctags_parser;
 
 import std.stdio : File;
-import std.string : split, strip, indexOf;
+import std.string : split, strip, indexOf, replace, endsWith;
 import std.regex : regex, match;
 import std.file : exists;
+import std.algorithm.iteration : filter, map;
 import std.algorithm.searching : startsWith;
+import std.array : array;
 
 /**
  * A single symbol entry parsed from a ctags output line.
@@ -123,20 +125,14 @@ int parseLineField(string field)
  */
 CtagsEntry[] parseCtagsFile(string tagsPath)
 {
-	CtagsEntry[] entries;
-
 	if(!exists(tagsPath))
-		return entries;
+		return null;
 
 	auto file = File(tagsPath, "r");
-	foreach(string line; file.byLineCopy) {
-		auto entry = parseCtagsLine(line.strip());
-		if(entry.symbol.length > 0) {
-			entries ~= entry;
-		}
-	}
-
-	return entries;
+	return file.byLineCopy
+		.map!(line => parseCtagsLine(line.strip()))
+		.filter!(entry => entry.symbol.length > 0)
+		.array;
 }
 
 /**
@@ -155,37 +151,26 @@ CtagsEntry[] parseCtagsFile(string tagsPath)
  */
 CtagsEntry[] searchEntries(CtagsEntry[] entries, string query, string matchType, string kindFilter)
 {
-	CtagsEntry[] results;
-
-	foreach(entry; entries) {
+	return entries.filter!((entry) {
 		if(kindFilter.length > 0 && entry.kind != kindFilter)
-			continue;
+			return false;
 
-		bool matches = false;
 		switch(matchType) {
 		case "exact":
-			matches = (entry.symbol == query);
-			break;
+			return entry.symbol == query;
 		case "prefix":
-			matches = entry.symbol.startsWith(query);
-			break;
+			return entry.symbol.startsWith(query);
 		case "regex":
 			try {
 				auto pattern = regex(query);
-				matches = !match(entry.symbol, pattern).empty;
+				return !match(entry.symbol, pattern).empty;
 			} catch(Exception) {
-				matches = (entry.symbol == query);
+				return entry.symbol == query;
 			}
-			break;
 		default:
-			matches = (entry.symbol == query);
+			return entry.symbol == query;
 		}
-
-		if(matches)
-			results ~= entry;
-	}
-
-	return results;
+	}).array;
 }
 
 /**
@@ -251,4 +236,37 @@ string kindToString(string kind)
 	default:
 		return kind;
 	}
+}
+
+/**
+ * Convert a relative source file path to a D module name.
+ *
+ * Strips a leading "source/" or "src/" prefix, removes the ".d" extension,
+ * handles "package.d" files, and replaces path separators with dots.
+ *
+ * Params:
+ *     path = A relative path such as "source/foo/bar.d".
+ *
+ * Returns:
+ *     A dotted module name such as "foo.bar", or an empty string if the
+ *     path does not end in ".d".
+ */
+string pathToModuleName(string path)
+{
+	string p = path.replace("\\", "/");
+
+	if(p.startsWith("source/"))
+		p = p[7 .. $];
+	else if(p.startsWith("src/"))
+		p = p[4 .. $];
+
+	if(!p.endsWith(".d"))
+		return "";
+
+	p = p[0 .. $ - 2];
+
+	if(p.endsWith("/package"))
+		p = p[0 .. $ - 8];
+
+	return p.replace("/", ".");
 }

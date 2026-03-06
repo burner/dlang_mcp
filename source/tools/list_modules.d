@@ -18,7 +18,7 @@ import std.algorithm.sorting : sort;
 import tools.base : BaseTool;
 import mcp.types : ToolResult;
 import utils.process : executeCommand;
-import utils.ctags_parser : CtagsEntry, parseCtagsLine;
+import utils.ctags_parser : CtagsEntry, parseCtagsLine, kindToString, pathToModuleName;
 
 /**
  * Tool that lists all modules in a D project with a summary of their public API.
@@ -196,7 +196,7 @@ private:
 			auto symObj = JSONValue(cast(string[string])null);
 			symObj["name"] = entry.symbol;
 			if(entry.kind.length > 0)
-				symObj["kind"] = kindToFullName(entry.kind);
+				symObj["kind"] = kindToString(entry.kind);
 			if(entry.signature.length > 0)
 				symObj["signature"] = entry.signature;
 			if(entry.scopeName.length > 0)
@@ -212,49 +212,4 @@ private:
 		return obj;
 	}
 
-	static string pathToModuleName(string path)
-	{
-		string p = path.replace("\\", "/");
-
-		if(p.startsWith("source/"))
-			p = p[7 .. $];
-		else if(p.startsWith("src/"))
-			p = p[4 .. $];
-
-		if(!p.endsWith(".d"))
-			return "";
-
-		p = p[0 .. $ - 2];
-
-		if(p.endsWith("/package"))
-			p = p[0 .. $ - 8];
-
-		return p.replace("/", ".");
-	}
-
-	static string kindToFullName(string kind)
-	{
-		switch(kind) {
-		case "f":
-			return "function";
-		case "c":
-			return "class";
-		case "s":
-			return "struct";
-		case "g":
-			return "enum";
-		case "i":
-			return "interface";
-		case "v":
-			return "variable";
-		case "e":
-			return "enum_member";
-		case "m":
-			return "member";
-		case "p":
-			return "property";
-		default:
-			return kind;
-		}
-	}
 }

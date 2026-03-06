@@ -318,11 +318,7 @@ private:
 			out_ ~= format(" (line %d)", t.line);
 
 		// Show inheritance
-		string[] heritage;
-		foreach(bc; t.baseClasses)
-			heritage ~= bc;
-		foreach(iface; t.interfaces)
-			heritage ~= iface;
+		auto heritage = t.baseClasses ~ t.interfaces;
 		if(heritage.length > 0)
 			out_ ~= " : " ~ heritage.join(", ");
 

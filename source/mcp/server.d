@@ -19,6 +19,7 @@ import mcp.transport : StdioTransport, EOFException;
 import mcp.transport_interface : Transport;
 import tools.base : Tool;
 import std.logger : info, error, trace, LogLevel, globalLogLevel;
+import utils.function_call_logger : FunctionCallLogger;
 
 /**
  * The MCP server that manages tool registration and handles JSON-RPC requests.
@@ -125,20 +126,34 @@ class MCPServer {
 	 */
 	JsonRpcResponse handleRequest(ref const JsonRpcRequest request)
 	{
+		auto logger = FunctionCallLogger.getInstance();
+
 		switch(request.method) {
 		case "initialize":
+			logger.log("initialize");
 			return handleInitialize(request.id, request.params);
 		case "tools/list":
+			logger.log("tools/list");
 			return handleToolsList(request.id);
-		case "tools/call":
-			return handleToolsCall(request.id, request.params);
+		case "tools/call": {
+				string toolName;
+				try {
+					toolName = request.params["name"].str;
+				} catch(Exception) {
+					toolName = "(unknown)";
+				}
+				logger.log("tools/call", toolName, request.params);
+				return handleToolsCall(request.id, request.params);
+			}
 		case "ping":
+			logger.log("ping");
 			JsonRpcResponse pingResponse;
 			pingResponse.jsonrpc = "2.0";
 			pingResponse.id = request.id;
 			pingResponse.result = JSONValue(cast(string[string])null);
 			return pingResponse;
 		case "resources/list":
+			logger.log("resources/list");
 			JsonRpcResponse resListResponse;
 			resListResponse.jsonrpc = "2.0";
 			resListResponse.id = request.id;
@@ -147,6 +162,7 @@ class MCPServer {
 			resListResponse.result = resListResult;
 			return resListResponse;
 		case "prompts/list":
+			logger.log("prompts/list");
 			JsonRpcResponse promptsResponse;
 			promptsResponse.jsonrpc = "2.0";
 			promptsResponse.id = request.id;
@@ -155,6 +171,7 @@ class MCPServer {
 			promptsResponse.result = promptsResult;
 			return promptsResponse;
 		default:
+			logger.log("unknown", request.method);
 			return createMethodNotFoundResponse(request.id, request.method);
 		}
 	}

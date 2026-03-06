@@ -17,6 +17,7 @@ import std.algorithm.iteration : map, filter;
 import tools.base : BaseTool;
 import mcp.types : ToolResult;
 import utils.process : executeCommand;
+import utils.ctags_parser : pathToModuleName;
 
 /**
  * Tool that analyzes a D/dub project's structure and returns a comprehensive report.
@@ -303,28 +304,4 @@ private:
 		return output.data;
 	}
 
-	static string pathToModuleName(string path)
-	{
-		// Convert source/foo/bar.d -> foo.bar
-		// Convert source/foo/package.d -> foo
-		import std.algorithm.searching : startsWith;
-
-		string p = path.replace("\\", "/");
-
-		// Strip leading source/ or src/
-		if(p.startsWith("source/"))
-			p = p[7 .. $];
-		else if(p.startsWith("src/"))
-			p = p[4 .. $];
-
-		if(!p.endsWith(".d"))
-			return "";
-
-		p = p[0 .. $ - 2]; // strip .d
-
-		if(p.endsWith("/package"))
-			p = p[0 .. $ - 8]; // strip /package
-
-		return p.replace("/", ".");
-	}
 }

@@ -6,6 +6,8 @@
  */
 module utils.security;
 
+import std.algorithm.searching : canFind;
+
 /**
  * Security-specific exception thrown when a security check fails.
  *
@@ -40,9 +42,7 @@ private immutable string[] _validCompilers = ["dmd", "ldc2", "gdc"];
  */
 string validateCompiler(string compiler)
 {
-	foreach(valid; _validCompilers) {
-		if(compiler == valid)
-			return compiler;
-	}
-	throw new SecurityException("Compiler must be 'dmd', 'ldc2', or 'gdc'");
+	if(!_validCompilers[].canFind(compiler))
+		throw new SecurityException("Compiler must be 'dmd', 'ldc2', or 'gdc'");
+	return compiler;
 }

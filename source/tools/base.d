@@ -128,12 +128,10 @@ unittest {
 	assert("package_name" in props, "Schema should have package_name");
 	assert("version_" in props, "Schema should have version_");
 	assert("required" in schema, "Schema should have required array");
-	bool hasRequired = false;
-	foreach(r; schema["required"].array) {
-		if(r.str == "package_name")
-			hasRequired = true;
-	}
-	assert(hasRequired, "package_name should be required");
+	import std.algorithm.searching : canFind;
+
+	assert(schema["required"].array.canFind!(r => r.str == "package_name"),
+			"package_name should be required");
 }
 
 /// FetchPackageTool returns error when package_name is missing

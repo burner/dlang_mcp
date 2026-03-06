@@ -95,6 +95,8 @@ struct CliOptions {
 	bool vverbose;
 	/** Process execution timeout in seconds (default: 30). */
 	int timeout = 30;
+	/** File path for MCP function call logging (empty = disabled). */
+	string functionCallLog;
 
 	// -- Per-tool CLI flags (JSON args) --
 	string toolDscanner;
@@ -188,7 +190,10 @@ version(TestMode) {
 					"search-types", "Run search_types tool with JSON args",
 					&opts.toolSearchTypes, "search-examples",
 					"Run search_examples tool with JSON args", &opts.toolSearchExamples,
-					"get-imports", "Run get_imports tool with JSON args", &opts.toolGetImports,);
+					"get-imports", "Run get_imports tool with JSON args",
+					&opts.toolGetImports,
+					"function-call-log", "Log MCP function calls to file (disabled if empty)",
+					&opts.functionCallLog,);
 		} catch(GetOptException e) {
 			stderr.writeln("Error: ", e.msg);
 			printHelp();
@@ -215,6 +220,16 @@ version(TestMode) {
 			import core.time : dur;
 
 			setProcessTimeout(dur!"seconds"(opts.timeout));
+		}
+
+		// Configure function call logger
+		{
+			import utils.function_call_logger : FunctionCallLogger;
+
+			if(opts.functionCallLog.length > 0) {
+				auto logger = FunctionCallLogger.getInstance();
+				logger.setLogFile(opts.functionCallLog);
+			}
 		}
 
 		if(opts.help) {
@@ -347,6 +362,7 @@ void printHelp()
 	writeln("  --port=PORT      HTTP port (default: 3000)");
 	writeln("  --host=HOST      HTTP host (default: 127.0.0.1)");
 	writeln("  --timeout=SECS   Process execution timeout (default: 30)");
+	writeln("  --function-call-log=FILE  Log MCP function calls to file");
 	writeln();
 	writeln("Analyze options:");
 	writeln("  --analyze-project=PATH          Project path to analyze");
@@ -536,10 +552,12 @@ void printFeatureStatus()
 
 private void checkExternalTool(string name, string[] command)
 {
+	import std.format : format;
+
 	enum OK = "[OK]";
 	enum NO = "[--]";
 
-	string padding = name.length < 20 ? "                    "[0 .. 20 - name.length] : " ";
+	string paddedName = format!"%-20s"(name);
 
 	try {
 		auto result = execute(command);
@@ -550,12 +568,12 @@ private void checkExternalTool(string name, string[] command)
 			// Truncate long version strings
 			if(firstLine.length > 50)
 				firstLine = firstLine[0 .. 50] ~ "...";
-			writeln("  ", OK, " ", name, padding, firstLine);
+			writeln("  ", OK, " ", paddedName, firstLine);
 		} else {
-			writeln("  ", NO, " ", name, padding, "found but returned error");
+			writeln("  ", NO, " ", paddedName, "found but returned error");
 		}
 	} catch(Exception) {
-		writeln("  ", NO, " ", name, padding, "not found in PATH");
+		writeln("  ", NO, " ", paddedName, "not found in PATH");
 	}
 }
 

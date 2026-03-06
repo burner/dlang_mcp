@@ -44,16 +44,10 @@ struct PackageMetadata {
 		if(license.length > 0)
 			obj["license"] = JSONValue(license);
 		if(authors.length > 0) {
-			JSONValue[] arr;
-			foreach(a; authors)
-				arr ~= JSONValue(a);
-			obj["authors"] = JSONValue(arr);
+			obj["authors"] = JSONValue(authors.map!(a => JSONValue(a)).array);
 		}
 		if(tags.length > 0) {
-			JSONValue[] arr;
-			foreach(t; tags)
-				arr ~= JSONValue(t);
-			obj["tags"] = JSONValue(arr);
+			obj["tags"] = JSONValue(tags.map!(t => JSONValue(t)).array);
 		}
 		return JSONValue(obj);
 	}

@@ -194,12 +194,11 @@ struct ToolResult {
 	 */
 	JSONValue toJSON() const
 	{
+		import std.algorithm.iteration : map;
+		import std.array : array;
+
 		JSONValue json;
-		JSONValue[] contentArray;
-		foreach(c; content) {
-			contentArray ~= c.toJSON();
-		}
-		json["content"] = JSONValue(contentArray);
+		json["content"] = JSONValue(content.map!(c => c.toJSON()).array);
 		json["isError"] = JSONValue(isError);
 		return json;
 	}

@@ -193,10 +193,7 @@ private JSONValue probeExternalTool(string[] command)
 			auto output = result.output.strip();
 			string firstLine = "";
 			if(output.length > 0) {
-				foreach(line; output.splitter('\n')) {
-					firstLine = line;
-					break;
-				}
+				firstLine = output.splitter('\n').front;
 			}
 			if(firstLine.length > 80)
 				firstLine = firstLine[0 .. 80] ~ "...";

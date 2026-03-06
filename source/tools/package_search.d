@@ -112,12 +112,10 @@ unittest {
 	auto tool = new PackageSearchTool();
 	auto schema = tool.inputSchema;
 	assert("required" in schema, "Schema should have 'required' array");
-	bool hasQuery = false;
-	foreach(r; schema["required"].array) {
-		if(r.str == "query")
-			hasQuery = true;
-	}
-	assert(hasQuery, "query should be listed in required");
+	import std.algorithm.searching : canFind;
+
+	assert(schema["required"].array.canFind!(r => r.str == "query"),
+			"query should be listed in required");
 }
 
 /// PackageSearchTool schema has correct property types and defaults

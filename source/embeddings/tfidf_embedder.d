@@ -8,6 +8,7 @@ import std.algorithm;
 import std.array;
 import std.conv;
 import std.math;
+import std.numeric;
 import std.regex;
 import std.string;
 import std.ascii;
@@ -314,29 +315,16 @@ class TfIdfEmbedder : Embedder {
 
 	private string[] tokenize(string text)
 	{
-		string[] tokens;
-
-		text = text.toLower;
-
 		auto wordRe = regex(r"[a-z][a-z0-9_]*");
 
-		foreach(match; matchAll(text, wordRe)) {
-			string token = match.hit;
-			if(token.length >= 2 && token.length <= 20) {
-				tokens ~= token;
-			}
-		}
-
-		return tokens;
+		return matchAll(text.toLower, wordRe).map!(m => m.hit)
+			.filter!(token => token.length >= 2 && token.length <= 20)
+			.array;
 	}
 
 	private void normalize(float[] vec)
 	{
-		float norm = 0.0f;
-		foreach(v; vec) {
-			norm += v * v;
-		}
-		norm = sqrt(norm);
+		float norm = sqrt(dotProduct(vec, vec));
 
 		if(norm > 1e-10f) {
 			foreach(ref v; vec) {
@@ -349,28 +337,22 @@ class TfIdfEmbedder : Embedder {
 version(unittest) {
 	private bool isZeroVector(float[] vec)
 	{
-		foreach(v; vec)
-			if(v != 0.0f)
-				return false;
-		return true;
+		import std.algorithm.searching : all;
+
+		return vec.all!(v => v == 0.0f);
 	}
 
 	private float cosineSimilarity(float[] a, float[] b)
 	{
 		import std.math : sqrt;
+		import std.numeric : dotProduct;
 
 		if(a.length != b.length)
 			return 0.0f;
 
-		float dot = 0.0f;
-		float normA = 0.0f;
-		float normB = 0.0f;
-
-		foreach(i; 0 .. a.length) {
-			dot += a[i] * b[i];
-			normA += a[i] * a[i];
-			normB += b[i] * b[i];
-		}
+		float dot = dotProduct(a, b);
+		float normA = dotProduct(a, a);
+		float normB = dotProduct(b, b);
 
 		auto denom = sqrt(normA) * sqrt(normB);
 		if(denom < 1e-10f)

@@ -171,12 +171,10 @@ unittest {
 	auto tool = new FetchPackageTool();
 	auto schema = tool.inputSchema;
 	assert("required" in schema, "Schema should have required array");
-	bool hasRequired = false;
-	foreach(r; schema["required"].array) {
-		if(r.str == "package_name")
-			hasRequired = true;
-	}
-	assert(hasRequired, "package_name should be in required array");
+	import std.algorithm.searching : canFind;
+
+	assert(schema["required"].array.canFind!(r => r.str == "package_name"),
+			"package_name should be in required array");
 }
 
 /// FetchPackageTool inputSchema package_name has string type

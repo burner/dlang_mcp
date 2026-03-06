@@ -385,9 +385,7 @@ class HybridSearch {
 			return results;
 
 		// Fetch full details for ranked results
-		long[] ids;
-		foreach(r; results)
-			ids ~= r.id;
+		long[] ids = results.map!(r => r.id).array;
 
 		string detailSql = format("
             SELECT f.id, f.name, f.fully_qualified_name, f.signature, f.doc_comment,
@@ -510,9 +508,7 @@ class HybridSearch {
 			return results;
 
 		// Fetch full details for ranked results
-		long[] ids;
-		foreach(r; results)
-			ids ~= r.id;
+		long[] ids = results.map!(r => r.id).array;
 
 		string detailSql = format("
             SELECT t.id, t.name, t.fully_qualified_name, t.kind, t.doc_comment,
@@ -622,9 +618,7 @@ class HybridSearch {
 		if(results.length == 0)
 			return results;
 
-		long[] ids;
-		foreach(r; results)
-			ids ~= r.id;
+		long[] ids = results.map!(r => r.id).array;
 
 		string sql = format("
             SELECT e.id, e.code, e.description, e.required_imports,

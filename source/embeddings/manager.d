@@ -134,10 +134,9 @@ class EmbeddingManager {
 version(unittest) {
 	private bool isZeroVector(float[] vec)
 	{
-		foreach(v; vec)
-			if(v != 0.0f)
-				return false;
-		return true;
+		import std.algorithm.searching : all;
+
+		return vec.all!(v => v == 0.0f);
 	}
 }
 

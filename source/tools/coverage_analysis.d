@@ -89,13 +89,14 @@ class CoverageAnalysisTool : BaseTool {
 				return createErrorResult("Not a directory: " ~ dir);
 
 			import std.path : baseName;
+			import std.algorithm.searching : startsWith;
 
 			foreach(entry; dirEntries(dir, "*.lst", SpanMode.shallow)) {
 				auto base = baseName(entry.name);
 				// Skip dependency library .lst files (their names start with ".."
 				// because dmd/ldc encodes relative paths like ../../.dub/packages/...
 				// as ..-..-..-.dub-packages-... in the .lst filename).
-				if(base.length >= 2 && base[0 .. 2] == "..")
+				if(base.startsWith(".."))
 					continue;
 				lstFiles ~= entry.name;
 			}

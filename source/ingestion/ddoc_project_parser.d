@@ -1369,12 +1369,10 @@ string inferComplexity(string doc)
 /** Split a string by whitespace into non-empty words. */
 string[] splitWords(string s)
 {
-	string[] result;
-	foreach(part; s.splitter(' ')) {
-		if(part.length > 0)
-			result ~= part;
-	}
-	return result;
+	import std.algorithm.iteration : filter;
+	import std.array : array;
+
+	return s.splitter(' ').filter!(part => part.length > 0).array;
 }
 
 // =====================================================================

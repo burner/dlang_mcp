@@ -573,11 +573,9 @@ class OnnxEmbedder : Embedder {
 
 	private void normalize(float[] vec)
 	{
-		float norm = 0.0f;
-		foreach(v; vec) {
-			norm += v * v;
-		}
-		norm = sqrt(norm);
+		import std.numeric : dotProduct;
+
+		float norm = sqrt(dotProduct(vec, vec));
 
 		if(norm > 1e-10f) {
 			foreach(ref v; vec) {
