@@ -89,6 +89,7 @@ struct JsonRpcResponse {
 	JSONValue id; /// Request identifier matching the originating request.
 	JSONValue result; /// The result payload on success.
 	JSONValue error; /// The error payload on failure.
+	string preSerializedResult; /// If non-empty, serializeResponse uses this to skip JSON serialization.
 
 	/**
 	 * Serializes this response to a JSON object.

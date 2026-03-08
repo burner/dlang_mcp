@@ -20,19 +20,9 @@ import storage.search;
  * and metadata about runnability and associated functions/types.
  */
 class ExampleSearchTool : SearchTool {
-	@property string name()
+	this()
 	{
-		return "search_examples";
-	}
-
-	@property string description()
-	{
-		return "Search for runnable D code examples by description or code pattern. Use when asked 'show me how to X in D', 'example of Y', or when the user needs working sample code. Returns complete, runnable snippets with required import statements. Best used after search_functions or search_types to see practical API usage. For API signatures without examples use search_functions.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "properties": {
                 "query": {
@@ -50,7 +40,17 @@ class ExampleSearchTool : SearchTool {
                 }
             },
             "required": ["query"]
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "search_examples";
+	}
+
+	@property string description()
+	{
+		return "Search for runnable D code examples by description or code pattern. Use when asked 'show me how to X in D', 'example of Y', or when the user needs working sample code. Returns complete, runnable snippets with required import statements. Best used after search_functions or search_types to see practical API usage. For API signatures without examples use search_functions.";
 	}
 
 	ToolResult execute(JSONValue arguments)

@@ -25,22 +25,9 @@ import utils.diagnostic : mergeOutput, parseDiagnostic;
  * when the build phase fails.
  */
 class RunProjectTool : BaseTool {
-	@property string name()
+	this()
 	{
-		return "run_project";
-	}
-
-	@property string description()
-	{
-		return "Build and execute a D/dub project, returning its output and exit code. Use when asked "
-			~ "to run, execute, launch, or try a D program. Builds if needed, then runs the binary. "
-			~ "Returns stdout, stderr, exit code, and compiler errors if build fails. Requires "
-			~ "dub.json or dub.sdl. For building without running use build_project; for tests use run_tests.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "properties": {
                 "project_path": {
@@ -73,7 +60,20 @@ class RunProjectTool : BaseTool {
                     "description": "Force rebuild before running (default: false)."
                 }
             }
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "run_project";
+	}
+
+	@property string description()
+	{
+		return "Build and execute a D/dub project, returning its output and exit code. Use when asked "
+			~ "to run, execute, launch, or try a D program. Builds if needed, then runs the binary. "
+			~ "Returns stdout, stderr, exit code, and compiler errors if build fails. Requires "
+			~ "dub.json or dub.sdl. For building without running use build_project; for tests use run_tests.";
 	}
 
 	ToolResult execute(JSONValue arguments)

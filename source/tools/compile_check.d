@@ -24,24 +24,9 @@ import utils.diagnostic : mergeOutput, collectDiagnostics;
  * from the project configuration.
  */
 class CompileCheckTool : BaseTool {
-	@property string name()
+	this()
 	{
-		return "compile_check";
-	}
-
-	@property string description()
-	{
-		return "Compile-check D code for type errors, undefined identifiers, and syntax errors without "
-			~ "linking or running. Use when asked 'does this compile?', 'check for errors', or "
-			~ "'what's wrong with this code?'. Returns a structured list of errors and warnings with "
-			~ "file, line, column, and message. Provide either inline code or a file path. Set "
-			~ "dub_project for automatic import path detection. For a full project build use "
-			~ "build_project; for style issues use dscanner.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "description": "Provide either 'code' (inline source) or 'file_path' (path to .d file). At least one is required.",
             "properties": {
@@ -79,7 +64,22 @@ class CompileCheckTool : BaseTool {
                     "description": "Path to a dub project root. When set, import paths and versions are auto-detected from dub.json/dub.sdl — avoids manual import_paths/versions setup."
                 }
             }
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "compile_check";
+	}
+
+	@property string description()
+	{
+		return "Compile-check D code for type errors, undefined identifiers, and syntax errors without "
+			~ "linking or running. Use when asked 'does this compile?', 'check for errors', or "
+			~ "'what's wrong with this code?'. Returns a structured list of errors and warnings with "
+			~ "file, line, column, and message. Provide either inline code or a file path. Set "
+			~ "dub_project for automatic import path detection. For a full project build use "
+			~ "build_project; for style issues use dscanner.";
 	}
 
 	ToolResult execute(JSONValue arguments)

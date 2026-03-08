@@ -23,22 +23,9 @@ import utils.diagnostic : mergeOutput;
  * fetch succeeded and any output messages.
  */
 class FetchPackageTool : BaseTool {
-	@property string name()
+	this()
 	{
-		return "fetch_package";
-	}
-
-	@property string description()
-	{
-		return "Download a D package from the dub registry to the local package cache. Use when asked to "
-			~ "install, download, or fetch a dub package. Returns success/failure status and output "
-			~ "messages. Downloads only — does not add the package to a project's dub.json. To "
-			~ "discover packages by keyword or functionality first, use search_packages.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "required": ["package_name"],
             "properties": {
@@ -51,7 +38,20 @@ class FetchPackageTool : BaseTool {
                     "description": "Specific version to fetch (e.g., '1.0.0', '~>2.0'). Omit to fetch the latest version."
                 }
             }
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "fetch_package";
+	}
+
+	@property string description()
+	{
+		return "Download a D package from the dub registry to the local package cache. Use when asked to "
+			~ "install, download, or fetch a dub package. Returns success/failure status and output "
+			~ "messages. Downloads only — does not add the package to a project's dub.json. To "
+			~ "discover packages by keyword or functionality first, use search_packages.";
 	}
 
 	ToolResult execute(JSONValue arguments)

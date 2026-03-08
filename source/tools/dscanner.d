@@ -48,19 +48,9 @@ enum CheckPreset {
  * output format.
  */
 class DscannerTool : BaseTool {
-	@property string name()
+	this()
 	{
-		return "dscanner";
-	}
-
-	@property string description()
-	{
-		return "Analyze D source code for bugs, style issues, and complexity via static analysis. Use when asked to lint, check code quality, find potential bugs, or list imports in D code. Default mode is lint; also supports syntax (validation only), imports (list dependencies), sloc (line counts), ast (parse tree), and ctags (symbol tags). Returns diagnostics with file, line, and message. For compile-time type errors use compile_check; for code formatting use dfmt.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "properties": {
                 "code": {
@@ -109,7 +99,17 @@ class DscannerTool : BaseTool {
                 }
             },
             "required": ["code"]
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "dscanner";
+	}
+
+	@property string description()
+	{
+		return "Analyze D source code for bugs, style issues, and complexity via static analysis. Use when asked to lint, check code quality, find potential bugs, or list imports in D code. Default mode is lint; also supports syntax (validation only), imports (list dependencies), sloc (line counts), ast (parse tree), and ctags (symbol tags). Returns diagnostics with file, line, and message. For compile-time type errors use compile_check; for code formatting use dfmt.";
 	}
 
 	ToolResult execute(JSONValue arguments)

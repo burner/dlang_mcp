@@ -32,6 +32,8 @@ import utils.function_call_logger : FunctionCallLogger;
 class MCPServer {
 	private Tool[string] tools;
 	private bool initialized = false;
+	private string cachedToolsResultJson; /// Pre-serialized {"tools":[...]} JSON string.
+	private JSONValue cachedToolsResultValue; /// Parsed JSONValue of the tools list result.
 
 	/**
 	 * Registers a tool that can be invoked via `tools/call` requests.
@@ -42,6 +44,29 @@ class MCPServer {
 	void registerTool(Tool tool)
 	{
 		tools[tool.name] = tool;
+		rebuildToolsListCache();
+	}
+
+	/**
+	 * Rebuilds the cached tools/list response from all registered tools.
+	 *
+	 * Called automatically by `registerTool` so the cache is always up to date.
+	 * Sorts tools alphabetically by name for deterministic ordering.
+	 */
+	private void rebuildToolsListCache()
+	{
+		auto sortedNames = tools.keys.array.sort().array;
+
+		JSONValue[] toolArray;
+		foreach(name; sortedNames) {
+			auto tool = tools[name];
+			toolArray ~= ToolDefinition(tool.name, tool.description, tool.inputSchema).toJSON();
+		}
+
+		JSONValue result;
+		result["tools"] = JSONValue(toolArray);
+		cachedToolsResultValue = result;
+		cachedToolsResultJson = result.toString();
 	}
 
 	/**
@@ -225,22 +250,11 @@ class MCPServer {
 			return createInvalidParamsResponse(id, "Server not initialized");
 		}
 
-		// Sort tool names for deterministic ordering
-		auto sortedNames = tools.keys.array.sort().array;
-
-		JSONValue[] toolArray;
-		foreach(name; sortedNames) {
-			auto tool = tools[name];
-			toolArray ~= ToolDefinition(tool.name, tool.description, tool.inputSchema).toJSON();
-		}
-
-		JSONValue result;
-		result["tools"] = JSONValue(toolArray);
-
 		JsonRpcResponse response;
 		response.jsonrpc = "2.0";
 		response.id = id;
-		response.result = result;
+		response.result = cachedToolsResultValue;
+		response.preSerializedResult = cachedToolsResultJson;
 		return response;
 	}
 

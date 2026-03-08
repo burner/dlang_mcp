@@ -26,23 +26,9 @@ import ingestion.ddoc_project_parser;
  * signatures, DDoc sections, and unittest associations.
  */
 class DdocAnalyzeTool : BaseTool {
-	@property string name()
+	this()
 	{
-		return "ddoc_analyze";
-	}
-
-	@property string description()
-	{
-		return "Analyze documentation coverage and attribute usage across a D project using DMD's JSON "
-			~ "output. Use when asked 'how well documented is this project?', 'what functions lack "
-			~ "docs?', or to audit @safe/@nogc usage. Returns per-module doc coverage percentages, "
-			~ "function/type counts, and template statistics. Requires dub.json or dub.sdl. For "
-			~ "project structure and dependencies use analyze_project; for module APIs use list_project_modules.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "properties": {
                 "project_path": {
@@ -56,7 +42,21 @@ class DdocAnalyzeTool : BaseTool {
                     "description": "Include per-module function/type details (default: false). Enable to see individual symbol documentation status."
                 }
             }
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "ddoc_analyze";
+	}
+
+	@property string description()
+	{
+		return "Analyze documentation coverage and attribute usage across a D project using DMD's JSON "
+			~ "output. Use when asked 'how well documented is this project?', 'what functions lack "
+			~ "docs?', or to audit @safe/@nogc usage. Returns per-module doc coverage percentages, "
+			~ "function/type counts, and template statistics. Requires dub.json or dub.sdl. For "
+			~ "project structure and dependencies use analyze_project; for module APIs use list_project_modules.";
 	}
 
 	ToolResult execute(JSONValue arguments)

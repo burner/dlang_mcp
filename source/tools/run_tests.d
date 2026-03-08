@@ -26,23 +26,9 @@ import utils.diagnostic : mergeOutput, parseDiagnostic;
  * messages into structured records.
  */
 class RunTestsTool : BaseTool {
-	@property string name()
+	this()
 	{
-		return "run_tests";
-	}
-
-	@property string description()
-	{
-		return "Run unit tests for a D/dub project and report results. Use when asked to test, run "
-			~ "tests, check if tests pass, or verify changes didn't break anything. Returns pass/fail "
-			~ "count, test output, and compiler errors if build fails. Requires dub.json or dub.sdl. "
-			~ "Use after build_project to verify correctness. For coverage analysis, build with "
-			~ "dmd -cov first then use coverage_analysis on the .lst output.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "properties": {
                 "project_path": {
@@ -69,7 +55,21 @@ class RunTestsTool : BaseTool {
                     "description": "Only run unit tests whose names match this string. Use to isolate specific failing tests."
                 }
             }
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "run_tests";
+	}
+
+	@property string description()
+	{
+		return "Run unit tests for a D/dub project and report results. Use when asked to test, run "
+			~ "tests, check if tests pass, or verify changes didn't break anything. Returns pass/fail "
+			~ "count, test output, and compiler errors if build fails. Requires dub.json or dub.sdl. "
+			~ "Use after build_project to verify correctness. For coverage analysis, build with "
+			~ "dmd -cov first then use coverage_analysis on the .lst output.";
 	}
 
 	ToolResult execute(JSONValue arguments)

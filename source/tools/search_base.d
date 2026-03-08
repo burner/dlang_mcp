@@ -33,6 +33,11 @@ class SearchDBNotFoundException : Exception {
  * automatically. The connection is closed on destruction or via explicit `close()`.
  */
 abstract class SearchTool : BaseTool {
+	this(JSONValue schema)
+	{
+		super(schema);
+	}
+
 	private DBConnection _conn; /// Lazily-initialized database connection.
 	private HybridSearch _search; /// Lazily-initialized hybrid search engine.
 
@@ -120,6 +125,11 @@ abstract class SearchTool : BaseTool {
 version(unittest) {
 	/// Concrete subclass of SearchTool for testing protected/abstract members.
 	private class TestableSearchTool : SearchTool {
+		this()
+		{
+			super(parseJSON(`{"type":"object","properties":{}}`));
+		}
+
 		@property string name()
 		{
 			return "test_search";
@@ -128,11 +138,6 @@ version(unittest) {
 		@property string description()
 		{
 			return "A testable search tool";
-		}
-
-		@property JSONValue inputSchema()
-		{
-			return parseJSON(`{"type":"object","properties":{}}`);
 		}
 
 		ToolResult execute(JSONValue arguments)

@@ -12,23 +12,9 @@ import tools.base : BaseTool;
 import mcp.types : ToolResult;
 
 class CoverageAnalysisTool : BaseTool {
-	override @property string name()
+	this()
 	{
-		return "coverage_analysis";
-	}
-
-	override @property string description()
-	{
-		return "Analyze D code coverage from .lst files produced by dmd -cov or ldc2 --cov. Use when "
-			~ "asked 'what code isn't tested?', 'show coverage gaps', or 'which functions need more "
-			~ "tests?'. Returns per-function coverage statistics sorted by most uncovered lines first. "
-			~ "Provide a single .lst file or a directory to scan all .lst files. Run run_tests with "
-			~ "coverage flags first to generate .lst files.";
-	}
-
-	override @property JSONValue inputSchema()
-	{
-		return JSONValue([
+		super(JSONValue([
 			"type": JSONValue("object"),
 			"properties": JSONValue([
 				"file_path": JSONValue([
@@ -47,7 +33,21 @@ class CoverageAnalysisTool : BaseTool {
 					"default": JSONValue(1)
 				])
 			])
-		]);
+		]));
+	}
+
+	override @property string name()
+	{
+		return "coverage_analysis";
+	}
+
+	override @property string description()
+	{
+		return "Analyze D code coverage from .lst files produced by dmd -cov or ldc2 --cov. Use when "
+			~ "asked 'what code isn't tested?', 'show coverage gaps', or 'which functions need more "
+			~ "tests?'. Returns per-function coverage statistics sorted by most uncovered lines first. "
+			~ "Provide a single .lst file or a directory to scan all .lst files. Run run_tests with "
+			~ "coverage flags first to generate .lst files.";
 	}
 
 	override ToolResult execute(JSONValue arguments)

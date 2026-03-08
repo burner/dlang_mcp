@@ -57,6 +57,10 @@ JsonRpcRequest parseRequest(string jsonLine)
 /**
  * Serializes a `JsonRpcResponse` to its JSON string representation.
  *
+ * If the response has a `preSerializedResult`, the result portion is spliced
+ * directly into the output without going through JSONValue serialization,
+ * avoiding all JSON construction overhead.
+ *
  * Params:
  *     response = The response struct to serialize.
  *
@@ -64,6 +68,10 @@ JsonRpcRequest parseRequest(string jsonLine)
  */
 string serializeResponse(JsonRpcResponse response)
 {
+	if(response.preSerializedResult.length > 0) {
+		return `{"jsonrpc":"2.0","id":` ~ response.id.toString() ~ `,"result":`
+			~ response.preSerializedResult ~ `}`;
+	}
 	return response.toJSON().toString();
 }
 

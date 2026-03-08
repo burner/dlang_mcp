@@ -24,23 +24,9 @@ import utils.diagnostic : mergeOutput;
  * Parses upgrade output to extract which packages changed versions.
  */
 class UpgradeDependenciesTool : BaseTool {
-	@property string name()
+	this()
 	{
-		return "upgrade_dependencies";
-	}
-
-	@property string description()
-	{
-		return "Upgrade or verify dependencies for a D/dub project. Use when asked to update packages, "
-			~ "fix missing dependencies, or check dependency consistency. Returns which packages were "
-			~ "updated and to what versions. Requires dub.json or dub.sdl. Use missing_only=true after "
-			~ "cloning to fetch without upgrading; verify=true to check without modifying. For "
-			~ "downloading individual packages use fetch_package.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "properties": {
                 "project_path": {
@@ -59,7 +45,21 @@ class UpgradeDependenciesTool : BaseTool {
                     "description": "Check dependency version consistency without modifying anything (default: false). Use for CI or auditing."
                 }
             }
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "upgrade_dependencies";
+	}
+
+	@property string description()
+	{
+		return "Upgrade or verify dependencies for a D/dub project. Use when asked to update packages, "
+			~ "fix missing dependencies, or check dependency consistency. Returns which packages were "
+			~ "updated and to what versions. Requires dub.json or dub.sdl. Use missing_only=true after "
+			~ "cloning to fetch without upgrading; verify=true to check without modifying. For "
+			~ "downloading individual packages use fetch_package.";
 	}
 
 	ToolResult execute(JSONValue arguments)

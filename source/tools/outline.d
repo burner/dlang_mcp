@@ -29,24 +29,9 @@ import utils.process : executeCommandWithInput;
  * inline code input.
  */
 class ModuleOutlineTool : BaseTool {
-	@property string name()
+	this()
 	{
-		return "get_module_outline";
-	}
-
-	@property string description()
-	{
-		return "Retrieve a hierarchical outline of all symbols in a single D source file or code snippet. "
-			~ "Use when asked 'what's in this file?', 'show me the structure', or 'list functions in "
-			~ "this module'. Returns nested JSON with each symbol's name, kind, line number, visibility, "
-			~ "attributes (@safe, @nogc, nothrow, pure), return type, parameters, and ddoc comments. "
-			~ "Provide either a file path or inline code. For project-wide symbol search use "
-			~ "ctags_search; for all modules use list_project_modules.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
 			"type": "object",
 			"description": "Provide either 'file_path' (path to .d file) or 'code' (inline source). At least one is required.",
 			"properties": {
@@ -64,7 +49,22 @@ class ModuleOutlineTool : BaseTool {
 					"description": "Include private and protected symbols (default: true). Set false to see only the public API."
 				}
 			}
-		}`);
+		}`));
+	}
+
+	@property string name()
+	{
+		return "get_module_outline";
+	}
+
+	@property string description()
+	{
+		return "Retrieve a hierarchical outline of all symbols in a single D source file or code snippet. "
+			~ "Use when asked 'what's in this file?', 'show me the structure', or 'list functions in "
+			~ "this module'. Returns nested JSON with each symbol's name, kind, line number, visibility, "
+			~ "attributes (@safe, @nogc, nothrow, pure), return type, parameters, and ddoc comments. "
+			~ "Provide either a file path or inline code. For project-wide symbol search use "
+			~ "ctags_search; for all modules use list_project_modules.";
 	}
 
 	ToolResult execute(JSONValue arguments)

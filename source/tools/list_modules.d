@@ -28,23 +28,9 @@ import utils.ctags_parser : CtagsEntry, parseCtagsLine, kindToString, pathToModu
  * symbol extraction.
  */
 class ListProjectModulesTool : BaseTool {
-	@property string name()
+	this()
 	{
-		return "list_project_modules";
-	}
-
-	@property string description()
-	{
-		return "List all modules in a D project with their public API summaries. Use when asked 'what "
-			~ "modules are in this project?', 'show the project structure', or to get a high-level "
-			~ "overview of available functionality. Returns each module's file path, name, and public "
-			~ "symbols (functions, classes, structs, enums) with signatures. For detailed single-module "
-			~ "analysis use get_module_outline; for searching a specific symbol by name use ctags_search.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "properties": {
                 "project_path": {
@@ -58,7 +44,21 @@ class ListProjectModulesTool : BaseTool {
                     "description": "Include private/protected symbols (default: false). Enable to see the full internal API."
                 }
             }
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "list_project_modules";
+	}
+
+	@property string description()
+	{
+		return "List all modules in a D project with their public API summaries. Use when asked 'what "
+			~ "modules are in this project?', 'show the project structure', or to get a high-level "
+			~ "overview of available functionality. Returns each module's file path, name, and public "
+			~ "symbols (functions, classes, structs, enums) with signatures. For detailed single-module "
+			~ "analysis use get_module_outline; for searching a specific symbol by name use ctags_search.";
 	}
 
 	ToolResult execute(JSONValue arguments)

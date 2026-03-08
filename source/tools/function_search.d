@@ -20,19 +20,9 @@ import storage.search;
  * module and package context, and relevance scores.
  */
 class FunctionSearchTool : SearchTool {
-	@property string name()
+	this()
 	{
-		return "search_functions";
-	}
-
-	@property string description()
-	{
-		return "Search for D function definitions by name, signature, or description across indexed packages. Use when asked 'how do I sort in D?', 'find a function that parses JSON', or 'what does writeln do?'. Returns signatures, documentation, and package origin. For types use search_types; for code examples use search_examples; for import statements use get_imports.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "properties": {
                 "query": {
@@ -50,7 +40,17 @@ class FunctionSearchTool : SearchTool {
                 }
             },
             "required": ["query"]
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "search_functions";
+	}
+
+	@property string description()
+	{
+		return "Search for D function definitions by name, signature, or description across indexed packages. Use when asked 'how do I sort in D?', 'find a function that parses JSON', or 'what does writeln do?'. Returns signatures, documentation, and package origin. For types use search_types; for code examples use search_examples; for import statements use get_imports.";
 	}
 
 	ToolResult execute(JSONValue arguments)

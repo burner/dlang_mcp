@@ -20,19 +20,9 @@ import utils.process : executeCommandWithInput;
  * length configuration.
  */
 class DfmtTool : BaseTool {
-	@property string name()
+	this()
 	{
-		return "dfmt";
-	}
-
-	@property string description()
-	{
-		return "Format D source code to consistent style with configurable brace placement, indentation, and line length. Use when asked to format, prettify, beautify, or fix indentation of D code. Returns the complete reformatted source as text. Does not detect bugs or verify correctness — for linting and static analysis use dscanner; for compilation error checking use compile_check.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "properties": {
                 "code": {
@@ -60,7 +50,17 @@ class DfmtTool : BaseTool {
                 }
             },
             "required": ["code"]
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "dfmt";
+	}
+
+	@property string description()
+	{
+		return "Format D source code to consistent style with configurable brace placement, indentation, and line length. Use when asked to format, prettify, beautify, or fix indentation of D code. Returns the complete reformatted source as text. Does not detect bugs or verify correctness — for linting and static analysis use dscanner; for compilation error checking use compile_check.";
 	}
 
 	/// Build the dfmt command array from the given JSON arguments.

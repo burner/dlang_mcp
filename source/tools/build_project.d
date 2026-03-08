@@ -22,22 +22,9 @@ import utils.diagnostic : mergeOutput, collectDiagnostics;
  * output into structured error/warning records.
  */
 class BuildProjectTool : BaseTool {
-	@property string name()
+	this()
 	{
-		return "build_project";
-	}
-
-	@property string description()
-	{
-		return "Build a D/dub project and report compilation results. Use when asked to build, compile, "
-			~ "or check if a project compiles successfully. Returns success/failure, compiler errors "
-			~ "with file/line/message, and warnings. Requires dub.json or dub.sdl. For single-file "
-			~ "checks use compile_check. After building, use run_project to execute or run_tests to verify.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "properties": {
                 "project_path": {
@@ -65,7 +52,20 @@ class BuildProjectTool : BaseTool {
                     "description": "Force full rebuild even if targets are up-to-date (default: false). Use when builds seem stale."
                 }
             }
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "build_project";
+	}
+
+	@property string description()
+	{
+		return "Build a D/dub project and report compilation results. Use when asked to build, compile, "
+			~ "or check if a project compiles successfully. Returns success/failure, compiler errors "
+			~ "with file/line/message, and warnings. Requires dub.json or dub.sdl. For single-file "
+			~ "checks use compile_check. After building, use run_project to execute or run_tests to verify.";
 	}
 
 	ToolResult execute(JSONValue arguments)

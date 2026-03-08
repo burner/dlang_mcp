@@ -45,6 +45,18 @@ interface Tool {
  * `createErrorResult` to build return values.
  */
 abstract class BaseTool : Tool {
+	private JSONValue _cachedSchema;
+
+	this(JSONValue schema)
+	{
+		_cachedSchema = schema;
+	}
+
+	@property JSONValue inputSchema()
+	{
+		return _cachedSchema;
+	}
+
 	/**
 	 * Creates a successful tool result containing a single text content block.
 	 *

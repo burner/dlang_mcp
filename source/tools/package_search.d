@@ -20,19 +20,9 @@ import storage.search;
  * authors, licenses, and relevance scores.
  */
 class PackageSearchTool : SearchTool {
-	@property string name()
+	this()
 	{
-		return "search_packages";
-	}
-
-	@property string description()
-	{
-		return "Search the indexed D package database by name, description, or tags. Use when asked 'is there a D library for X?' or to discover packages by keyword. Returns matching packages with names, descriptions, and metadata. Searches the local index, not the live registry. For function-level search use search_functions; to download a found package use fetch_package.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "properties": {
                 "query": {
@@ -46,7 +36,17 @@ class PackageSearchTool : SearchTool {
                 }
             },
             "required": ["query"]
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "search_packages";
+	}
+
+	@property string description()
+	{
+		return "Search the indexed D package database by name, description, or tags. Use when asked 'is there a D library for X?' or to discover packages by keyword. Returns matching packages with names, descriptions, and metadata. Searches the local index, not the live registry. For function-level search use search_functions; to download a found package use fetch_package.";
 	}
 
 	ToolResult execute(JSONValue arguments)

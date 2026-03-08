@@ -10,6 +10,12 @@ import mcp.types : ToolResult;
 
 /// A mock tool that echoes back its input for testing.
 class MockTool : BaseTool {
+	this()
+	{
+		super(parseJSON(
+				`{"type":"object","properties":{"input":{"type":"string"}},"required":["input"]}`));
+	}
+
 	@property string name()
 	{
 		return "test_tool";
@@ -18,12 +24,6 @@ class MockTool : BaseTool {
 	@property string description()
 	{
 		return "A mock tool for testing";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(
-				`{"type":"object","properties":{"input":{"type":"string"}},"required":["input"]}`);
 	}
 
 	ToolResult execute(JSONValue arguments)
@@ -36,6 +36,11 @@ class MockTool : BaseTool {
 
 /// A mock tool that always throws during execution.
 class FailingTool : BaseTool {
+	this()
+	{
+		super(parseJSON(`{"type":"object","properties":{}}`));
+	}
+
 	@property string name()
 	{
 		return "failing_tool";
@@ -46,11 +51,6 @@ class FailingTool : BaseTool {
 		return "A tool that always fails";
 	}
 
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{"type":"object","properties":{}}`);
-	}
-
 	ToolResult execute(JSONValue arguments)
 	{
 		throw new Exception("Intentional test failure");
@@ -59,6 +59,11 @@ class FailingTool : BaseTool {
 
 /// A tool that always throws, used for MCP spec compliance testing.
 class ThrowingTool : BaseTool {
+	this()
+	{
+		super(parseJSON(`{"type":"object","properties":{}}`));
+	}
+
 	@property string name()
 	{
 		return "throwing_tool";
@@ -67,11 +72,6 @@ class ThrowingTool : BaseTool {
 	@property string description()
 	{
 		return "A tool that throws for testing";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{"type":"object","properties":{}}`);
 	}
 
 	ToolResult execute(JSONValue arguments)

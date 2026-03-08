@@ -218,6 +218,15 @@ private JSONValue probeExternalTool(string[] command)
  * and the active search mode.
  */
 class FeatureStatusTool : BaseTool {
+	this()
+	{
+		super(parseJSON(`{
+			"type": "object",
+			"properties": {},
+			"required": []
+		}`));
+	}
+
 	@property string name()
 	{
 		return "get_feature_status";
@@ -226,15 +235,6 @@ class FeatureStatusTool : BaseTool {
 	@property string description()
 	{
 		return "Check which optional runtime features are available in this server instance. Use when diagnosing tool failures, asked 'is ONNX available?', or 'what features are enabled?'. Returns JSON with database, ONNX embeddings, sqlite-vec, external tool, and search mode availability. No parameters needed. Call this first when search or analysis tools return unexpected results.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
-			"type": "object",
-			"properties": {},
-			"required": []
-		}`);
 	}
 
 	ToolResult execute(JSONValue arguments)

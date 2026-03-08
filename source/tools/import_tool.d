@@ -20,22 +20,9 @@ import storage.search;
  * the corresponding `import` statements needed to use them.
  */
 class ImportTool : SearchTool {
-	@property string name()
+	this()
 	{
-		return "get_imports";
-	}
-
-	@property string description()
-	{
-		return "Look up the required import statements for D symbols. Use when asked 'what do I import "
-			~ "for X?', 'how to import writeln', or when you know a symbol name but need its module "
-			~ "path. Returns ready-to-paste import lines. Provide a single symbol or a list; fully "
-			~ "qualified names yield more precise results. Use after search_functions or search_types.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "description": "Provide either 'symbol' (single name) or 'symbols' (array of names). At least one is required.",
             "properties": {
@@ -49,7 +36,20 @@ class ImportTool : SearchTool {
                     "description": "A single symbol name to look up (e.g., 'writeln', 'JSONValue', 'map')."
                 }
             }
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "get_imports";
+	}
+
+	@property string description()
+	{
+		return "Look up the required import statements for D symbols. Use when asked 'what do I import "
+			~ "for X?', 'how to import writeln', or when you know a symbol name but need its module "
+			~ "path. Returns ready-to-paste import lines. Provide a single symbol or a list; fully "
+			~ "qualified names yield more precise results. Use after search_functions or search_types.";
 	}
 
 	ToolResult execute(JSONValue arguments)

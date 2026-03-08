@@ -27,6 +27,20 @@ import utils.ctags_parser : pathToModuleName;
  * `project_path` argument pointing to a directory containing a dub project file.
  */
 class AnalyzeProjectTool : BaseTool {
+	this()
+	{
+		super(parseJSON(`{
+            "type": "object",
+            "properties": {
+                "project_path": {
+                    "type": "string",
+                    "default": ".",
+                    "description": "Path to the project root containing dub.json or dub.sdl (default: current directory)."
+                }
+            }
+        }`));
+	}
+
 	@property string name()
 	{
 		return "analyze_project";
@@ -39,20 +53,6 @@ class AnalyzeProjectTool : BaseTool {
 			~ "build setup. Returns project name, dependency versions, source files, import paths, and "
 			~ "build settings. Uses dub describe with fallback to direct file parsing. For listing "
 			~ "modules and APIs use list_project_modules; for documentation coverage use ddoc_analyze.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
-            "type": "object",
-            "properties": {
-                "project_path": {
-                    "type": "string",
-                    "default": ".",
-                    "description": "Path to the project root containing dub.json or dub.sdl (default: current directory)."
-                }
-            }
-        }`);
 	}
 
 	ToolResult execute(JSONValue arguments)

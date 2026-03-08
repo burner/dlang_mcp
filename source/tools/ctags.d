@@ -28,19 +28,9 @@ import utils.ctags_parser : CtagsEntry, parseCtagsFile, searchEntries, formatEnt
  * with optional kind filtering.
  */
 class CtagsSearchTool : BaseTool {
-	@property string name()
+	this()
 	{
-		return "ctags_search";
-	}
-
-	@property string description()
-	{
-		return "Search for symbol definitions (functions, classes, structs, enums) by name across a D project. Use when asked 'where is X defined?', 'find the definition of Y', or 'locate this symbol'. Returns matching symbols with file paths and line numbers. Supports exact, prefix, and regex matching with optional kind filtering. Auto-generates tags when needed. For a full single-module outline use get_module_outline; for listing all project modules use list_project_modules.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "properties": {
                 "query": {
@@ -69,7 +59,17 @@ class CtagsSearchTool : BaseTool {
                 }
             },
             "required": ["query"]
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "ctags_search";
+	}
+
+	@property string description()
+	{
+		return "Search for symbol definitions (functions, classes, structs, enums) by name across a D project. Use when asked 'where is X defined?', 'find the definition of Y', or 'locate this symbol'. Returns matching symbols with file paths and line numbers. Supports exact, prefix, and regex matching with optional kind filtering. Auto-generates tags when needed. For a full single-module outline use get_module_outline; for listing all project modules use list_project_modules.";
 	}
 
 	ToolResult execute(JSONValue arguments)

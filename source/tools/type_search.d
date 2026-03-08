@@ -21,19 +21,9 @@ import storage.search;
  * module/package context.
  */
 class TypeSearchTool : SearchTool {
-	@property string name()
+	this()
 	{
-		return "search_types";
-	}
-
-	@property string description()
-	{
-		return "Search for D type definitions (classes, structs, interfaces, enums) by name or description across indexed packages. Use when asked 'what type represents X?', 'find a struct for Y', or to discover data structures. Returns matching types with definitions and documentation. Filter by kind to narrow results. For functions use search_functions; for usage examples use search_examples.";
-	}
-
-	@property JSONValue inputSchema()
-	{
-		return parseJSON(`{
+		super(parseJSON(`{
             "type": "object",
             "properties": {
                 "query": {
@@ -56,7 +46,17 @@ class TypeSearchTool : SearchTool {
                 }
             },
             "required": ["query"]
-        }`);
+        }`));
+	}
+
+	@property string name()
+	{
+		return "search_types";
+	}
+
+	@property string description()
+	{
+		return "Search for D type definitions (classes, structs, interfaces, enums) by name or description across indexed packages. Use when asked 'what type represents X?', 'find a struct for Y', or to discover data structures. Returns matching types with definitions and documentation. Filter by kind to narrow results. For functions use search_functions; for usage examples use search_examples.";
 	}
 
 	ToolResult execute(JSONValue arguments)
