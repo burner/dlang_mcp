@@ -35,20 +35,13 @@ jobs:
       with:
         compiler: ${{ matrix.compiler }}
 
-    - name: Style Lint
-      continue-on-error: true # The make file fails
-      run: |
-        make style_lint
-
-    - name: Test
+    - name: Unittest
       run: |
         dub test
 
-    - name: Test
-      working-directory: ./test
+    - name: Integration Tests
       run: |
-        dub build
-        ./test --onlyRunTests
+        dub --config=test
 
   Skip:
     if: "contains(github.event.head_commit.message, '[skip ci]')"
